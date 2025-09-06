@@ -749,60 +749,6 @@ def health_check():
         'output_folder': app.config['OUTPUT_FOLDER']
     })
 
-@app.route('/debug/errors')
-def get_recent_errors():
-    """عرض آخر الأخطاء المسجلة (للمطورين فقط)"""
-    try:
-        log_file = os.path.join('logs', 'errors.log')
-        if os.path.exists(log_file):
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                # آخر 50 سطر
-                recent_errors = lines[-50:] if len(lines) > 50 else lines
-                
-            return jsonify({
-                'total_lines': len(lines),
-                'recent_errors': recent_errors,
-                'log_file': log_file,
-                'timestamp': datetime.datetime.now().isoformat()
-            })
-        else:
-            return jsonify({'message': 'لا توجد أخطاء مسجلة', 'log_file': log_file})
-            
-    except Exception as e:
-        error_id, _ = log_detailed_error(e, "get_recent_errors")
-        return jsonify({'error': f'خطأ في قراءة سجل الأخطاء [ID: {error_id}]: {str(e)}'}), 500
-
-@app.route('/debug/system')
-def system_info():
-    """معلومات النظام التفصيلية"""
-    try:
-        import psutil
-        system_data = {
-            'cpu_percent': psutil.cpu_percent(),
-            'memory': dict(psutil.virtual_memory()._asdict()),
-            'disk': dict(psutil.disk_usage('/')._asdict()),
-        }
-    except ImportError:
-        system_data = {'note': 'psutil not installed'}
-    
-    return jsonify({
-        'python_version': sys.version,
-        'platform': sys.platform,
-        'cwd': os.getcwd(),
-        'environment_variables': {
-            key: value for key, value in os.environ.items() 
-            if not key.startswith('SECRET')  # إخفاء المفاتيح السرية
-        },
-        'flask_config': {
-            'UPLOAD_FOLDER': app.config.get('UPLOAD_FOLDER'),
-            'OUTPUT_FOLDER': app.config.get('OUTPUT_FOLDER'),
-            'MAX_CONTENT_LENGTH': app.config.get('MAX_CONTENT_LENGTH'),
-        },
-        'system': system_data,
-        'timestamp': datetime.datetime.now().isoformat()
-    })
-
 @app.route('/test-gpu')
 def test_gpu():
     """نقطة فحص دعم GPU"""

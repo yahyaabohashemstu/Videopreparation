@@ -43,100 +43,6 @@ def make_celery(app):
 
 celery = make_celery(app)
 
-# إعداد نظام Logging المتقدم
-def setup_logging():
-    """إعداد نظام تتبع الأخطاء المتقدم"""
-    # إنشاء مجلد logs
-    log_dir = os.path.join(os.getcwd(), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # إعداد logger
-    logger = logging.getLogger('video_processor')
-    logger.setLevel(logging.DEBUG)
-    
-    # تنسيق الرسائل
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)s | %(funcName)s:%(lineno)d | %(message)s'
-    )
-    
-    # ملف log للأخطاء
-    error_handler = logging.FileHandler(os.path.join(log_dir, 'errors.log'), encoding='utf-8')
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(formatter)
-    
-    # ملف log عام
-    info_handler = logging.FileHandler(os.path.join(log_dir, 'app.log'), encoding='utf-8')
-    info_handler.setLevel(logging.INFO)
-    info_handler.setFormatter(formatter)
-    
-    # Console output
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    
-    logger.addHandler(error_handler)
-    logger.addHandler(info_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
-
-# إنشاء logger عام
-logger = setup_logging()
-
-# دالة لتتبع الأخطاء بتفصيل عجيب
-def log_detailed_error(error, context="Unknown", extra_data=None):
-    """تسجيل خطأ مفصل مع جميع المعلومات الممكنة"""
-    error_id = str(uuid.uuid4())[:8]
-    timestamp = datetime.datetime.now().isoformat()
-    
-    error_details = {
-        'error_id': error_id,
-        'timestamp': timestamp,
-        'context': context,
-        'error_type': type(error).__name__,
-        'error_message': str(error),
-        'traceback': traceback.format_exc(),
-        'system_info': {
-            'python_version': sys.version,
-            'platform': sys.platform,
-            'cwd': os.getcwd(),
-        },
-        'environment': {
-            'FLASK_ENV': os.environ.get('FLASK_ENV'),
-            'DEBUG': os.environ.get('DEBUG'),
-            'REDIS_URL': os.environ.get('REDIS_URL', 'Not set'),
-            'UPLOAD_FOLDER': app.config.get('UPLOAD_FOLDER'),
-            'OUTPUT_FOLDER': app.config.get('OUTPUT_FOLDER'),
-        }
-    }
-    
-    if extra_data:
-        error_details['extra_data'] = extra_data
-    
-    # طباعة مفصلة للخطأ
-    logger.error("="*80)
-    logger.error(f"🚨 DETAILED ERROR REPORT - ID: {error_id}")
-    logger.error("="*80)
-    logger.error(f"⏰ Timestamp: {timestamp}")
-    logger.error(f"📍 Context: {context}")
-    logger.error(f"🔥 Error Type: {type(error).__name__}")
-    logger.error(f"💬 Error Message: {str(error)}")
-    logger.error("📊 System Info:")
-    for key, value in error_details['system_info'].items():
-        logger.error(f"   {key}: {value}")
-    logger.error("🌍 Environment:")
-    for key, value in error_details['environment'].items():
-        logger.error(f"   {key}: {value}")
-    if extra_data:
-        logger.error("📋 Extra Data:")
-        for key, value in extra_data.items():
-            logger.error(f"   {key}: {value}")
-    logger.error("🔍 Full Traceback:")
-    logger.error(traceback.format_exc())
-    logger.error("="*80)
-    
-    return error_id, error_details
-
 # إنشاء المجلدات المطلوبة
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
@@ -165,8 +71,7 @@ def get_video_info(video_path):
             info = json.loads(result.stdout)
             return info
     except Exception as e:
-        error_id, _ = log_detailed_error(e, "get_video_info", {"video_path": video_path})
-        print(f"❌ خطأ في الحصول على معلومات الفيديو [ID: {error_id}]: {e}")
+        print(f"خطأ في الحصول على معلومات الفيديو: {e}")
     return None
 
 def get_nvenc_encoder():
@@ -207,8 +112,7 @@ def test_gpu_support():
             return False
 
     except Exception as e:
-        error_id, _ = log_detailed_error(e, "test_gpu_support")
-        print(f"❌ خطأ في اختبار GPU [ID: {error_id}]: {e}")
+        print(f"❌ خطأ في اختبار GPU: {e}")
         return False
 
 def get_ultra_fast_settings():
@@ -553,26 +457,8 @@ def process_video_task(self, video_path, output_path, video2_path=None):
             raise Exception("فشل في معالجة الفيديو")
 
     except Exception as e:
-        error_id, error_details = log_detailed_error(e, "process_video_task", {
-            'video_path': video_path,
-            'output_path': output_path,
-            'video2_path': video2_path,
-            'task_id': self.request.id
-        })
-        
-        error_message = f"خطأ في المعالجة [ID: {error_id}]: {str(e)}"
-        logger.error(f"❌ {error_message}")
-        
-        self.update_state(
-            state='FAILURE', 
-            meta={
-                'progress': 0, 
-                'status': error_message,
-                'error_id': error_id,
-                'error_details': error_details,
-                'timestamp': datetime.datetime.now().isoformat()
-            }
-        )
+        print(f"❌ خطأ عام في المعالجة: {str(e)}")
+        self.update_state(state='FAILURE', meta={'progress': 0, 'status': f'خطأ: {str(e)}'})
         raise
 
 @app.route('/')
@@ -640,23 +526,7 @@ def upload_video():
         })
 
     except Exception as e:
-        error_id, error_details = log_detailed_error(e, "upload_video", {
-            'files_received': list(request.files.keys()),
-            'form_data': dict(request.form),
-            'content_length': request.content_length,
-            'remote_addr': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent')
-        })
-        
-        error_message = f"خطأ في الخادم [ID: {error_id}]: {str(e)}"
-        logger.error(f"❌ Upload Error: {error_message}")
-        
-        return jsonify({
-            'error': error_message,
-            'error_id': error_id,
-            'timestamp': datetime.datetime.now().isoformat(),
-            'debug_info': error_details if app.config.get('DEBUG') else None
-        }), 500
+        return jsonify({'error': f'خطأ في الخادم: {str(e)}'}), 500
 
 @app.route('/status/<task_id>')
 def task_status(task_id):
@@ -694,19 +564,7 @@ def task_status(task_id):
         return jsonify(response)
     
     except Exception as e:
-        error_id, error_details = log_detailed_error(e, "task_status", {
-            'task_id': task_id,
-            'remote_addr': request.remote_addr
-        })
-        
-        error_message = f"خطأ في استعلام الحالة [ID: {error_id}]: {str(e)}"
-        logger.error(f"❌ Status Error: {error_message}")
-        
-        return jsonify({
-            'error': error_message,
-            'error_id': error_id,
-            'timestamp': datetime.datetime.now().isoformat()
-        }), 500
+        return jsonify({'error': f'خطأ في استعلام الحالة: {str(e)}'}), 500
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -747,60 +605,6 @@ def health_check():
         'celery': 'configured',
         'upload_folder': app.config['UPLOAD_FOLDER'],
         'output_folder': app.config['OUTPUT_FOLDER']
-    })
-
-@app.route('/debug/errors')
-def get_recent_errors():
-    """عرض آخر الأخطاء المسجلة (للمطورين فقط)"""
-    try:
-        log_file = os.path.join('logs', 'errors.log')
-        if os.path.exists(log_file):
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                # آخر 50 سطر
-                recent_errors = lines[-50:] if len(lines) > 50 else lines
-                
-            return jsonify({
-                'total_lines': len(lines),
-                'recent_errors': recent_errors,
-                'log_file': log_file,
-                'timestamp': datetime.datetime.now().isoformat()
-            })
-        else:
-            return jsonify({'message': 'لا توجد أخطاء مسجلة', 'log_file': log_file})
-            
-    except Exception as e:
-        error_id, _ = log_detailed_error(e, "get_recent_errors")
-        return jsonify({'error': f'خطأ في قراءة سجل الأخطاء [ID: {error_id}]: {str(e)}'}), 500
-
-@app.route('/debug/system')
-def system_info():
-    """معلومات النظام التفصيلية"""
-    try:
-        import psutil
-        system_data = {
-            'cpu_percent': psutil.cpu_percent(),
-            'memory': dict(psutil.virtual_memory()._asdict()),
-            'disk': dict(psutil.disk_usage('/')._asdict()),
-        }
-    except ImportError:
-        system_data = {'note': 'psutil not installed'}
-    
-    return jsonify({
-        'python_version': sys.version,
-        'platform': sys.platform,
-        'cwd': os.getcwd(),
-        'environment_variables': {
-            key: value for key, value in os.environ.items() 
-            if not key.startswith('SECRET')  # إخفاء المفاتيح السرية
-        },
-        'flask_config': {
-            'UPLOAD_FOLDER': app.config.get('UPLOAD_FOLDER'),
-            'OUTPUT_FOLDER': app.config.get('OUTPUT_FOLDER'),
-            'MAX_CONTENT_LENGTH': app.config.get('MAX_CONTENT_LENGTH'),
-        },
-        'system': system_data,
-        'timestamp': datetime.datetime.now().isoformat()
     })
 
 @app.route('/test-gpu')

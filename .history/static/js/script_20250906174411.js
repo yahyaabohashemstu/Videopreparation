@@ -223,26 +223,11 @@ uploadForm.addEventListener("submit", async function (e) {
       // بدء تتبع حالة المهمة
       trackJobProgress(result.job_id, result.output_filename);
     } else {
-      showError(result.error || "حدث خطأ أثناء معالجة الفيديو", result);
+      showError(result.error || "حدث خطأ أثناء معالجة الفيديو");
     }
   } catch (error) {
-    console.error("🚨 UPLOAD ERROR:", error);
-    
-    // جمع معلومات تفصيلية عن الخطأ
-    const errorDetails = {
-      error_message: error.message,
-      error_stack: error.stack,
-      api_base: window.API_BASE,
-      current_url: window.location.href,
-      timestamp: new Date().toISOString(),
-      browser_info: {
-        userAgent: navigator.userAgent,
-        language: navigator.language,
-        platform: navigator.platform
-      }
-    };
-    
-    showError("حدث خطأ في الاتصال بالخادم - تحقق من Console للتفاصيل", errorDetails);
+    console.error("Error:", error);
+    showError("حدث خطأ في الاتصال بالخادم");
   }
 });
 
@@ -393,89 +378,6 @@ function showError(message, errorData = null) {
 // Hide error
 function hideError() {
   errorContainer.style.display = "none";
-}
-
-// Show debug information
-async function showDebugInfo() {
-  try {
-    const API_BASE = window.API_BASE || "http://localhost:5000";
-    
-    console.log("🔍 Fetching debug information...");
-    
-    // جمع معلومات النظام
-    const systemResponse = await fetch(`${API_BASE}/debug/system`);
-    const systemInfo = await systemResponse.json();
-    
-    // جمع معلومات الصحة
-    const healthResponse = await fetch(`${API_BASE}/health`);
-    const healthInfo = await healthResponse.json();
-    
-    // عرض المعلومات في نافذة منبثقة
-    const debugData = {
-      system: systemInfo,
-      health: healthInfo,
-      frontend: {
-        api_base: window.API_BASE,
-        current_url: window.location.href,
-        user_agent: navigator.userAgent,
-        timestamp: new Date().toISOString()
-      }
-    };
-    
-    console.log("🔧 DEBUG INFO:", debugData);
-    
-    // إنشاء نافذة جديدة لعرض المعلومات
-    const debugWindow = window.open('', '_blank', 'width=800,height=600');
-    debugWindow.document.write(`
-      <html>
-        <head>
-          <title>معلومات تقنية مفصلة</title>
-          <style>
-            body { font-family: 'Courier New', monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
-            pre { background: #000; padding: 15px; border-radius: 8px; overflow: auto; }
-            h2 { color: #00ffff; border-bottom: 2px solid #00ffff; padding-bottom: 5px; }
-          </style>
-        </head>
-        <body>
-          <h2>🔧 معلومات تقنية مفصلة</h2>
-          <pre>${JSON.stringify(debugData, null, 2)}</pre>
-        </body>
-      </html>
-    `);
-    
-  } catch (error) {
-    console.error("❌ Error fetching debug info:", error);
-    alert("فشل في جلب المعلومات التقنية: " + error.message);
-  }
-}
-
-// Download error log
-async function downloadErrorLog() {
-  try {
-    const API_BASE = window.API_BASE || "http://localhost:5000";
-    
-    const response = await fetch(`${API_BASE}/debug/errors`);
-    const errorLog = await response.json();
-    
-    // تحويل إلى نص وتحميل
-    const logText = JSON.stringify(errorLog, null, 2);
-    const blob = new Blob([logText], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `error_log_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    console.log("📥 Error log downloaded:", errorLog);
-    
-  } catch (error) {
-    console.error("❌ Error downloading log:", error);
-    alert("فشل في تحميل سجل الأخطاء: " + error.message);
-  }
 }
 
 // Hide all containers
