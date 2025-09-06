@@ -22,29 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeFileInputs();
   initializeNavigation();
   initializeSmoothScrolling();
-  testAPIConnection();
 });
-
-// Test API connection
-async function testAPIConnection() {
-  try {
-    const API_BASE = window.API_BASE || "http://localhost:5000";
-    console.log("Testing API connection to:", API_BASE);
-    
-    const response = await fetch(`${API_BASE}/api/test`);
-    
-    if (response.ok) {
-      const result = await response.json();
-      console.log("✅ API connection successful:", result);
-    } else {
-      console.error("❌ API connection failed:", response.status, response.statusText);
-      showError(`خطأ في الاتصال بالخادم: ${response.status} ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error("❌ API connection error:", error);
-    showError(`خطأ في الاتصال بالخادم: ${error.message}`);
-  }
-}
 
 // Initialize file input listeners
 function initializeFileInputs() {
@@ -269,13 +247,7 @@ async function trackJobProgress(jobId, outputFilename) {
       attempts++;
       
       const response = await fetch(`${API_BASE}/status/${jobId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
       const status = await response.json();
-      console.log('Status response:', status);
       
       console.log('Job status:', status);
       

@@ -573,15 +573,6 @@ def download_file(filename):
     except Exception:
         return jsonify({'error': 'ملف غير موجود'}), 404
 
-@app.route('/api/test')
-def api_test():
-    """اختبار بسيط للاتصال"""
-    return jsonify({
-        'message': 'API يعمل بشكل صحيح',
-        'timestamp': str(uuid.uuid4()),
-        'status': 'ok'
-    })
-
 @app.route('/health')
 def health_check():
     """فحص صحة التطبيق والاتصال بـ Redis"""
