@@ -1,0 +1,12 @@
+flask
+flask-cors
+gunicorn
+moviepy
+opencv-python-headless
+Pillow
+imageio-ffmpeg
+numpy
+celery
+redis
+werkzeug
+python-dotenv
