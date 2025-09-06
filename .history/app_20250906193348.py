@@ -589,63 +589,6 @@ def process_video_task(self, video_path, output_path, video2_path=None):
         )
         raise
 
-def process_video_direct(video_path, output_path, video2_path=None):
-    """معالجة مباشرة بدون Celery (fallback mode)"""
-    try:
-        logger.info("🔍 بدء المعالجة المباشرة...")
-        
-        # دمج الفيديوهات إذا كان هناك فيديو ثاني
-        final_video_path = video_path
-        if video2_path:
-            logger.info("🔗 دمج الفيديوهات...")
-            merged_path = merge_videos(video_path, video2_path)
-            if merged_path:
-                final_video_path = merged_path
-            else:
-                logger.warning("⚠️ فشل دمج الفيديوهات، استخدام الفيديو الأول فقط")
-
-        # فحص GPU
-        gpu_supported = test_gpu_support()
-
-        if gpu_supported:
-            logger.info("🚀 استخدام GPU (NVENC)...")
-            if process_video_ffmpeg_gpu(final_video_path, output_path):
-                # تنظيف الملف المدموج المؤقت
-                if video2_path and final_video_path != video_path:
-                    try:
-                        os.unlink(final_video_path)
-                    except:
-                        pass
-                logger.info("✅ تمت المعالجة بنجاح باستخدام GPU!")
-                return True
-            else:
-                logger.warning("⚠️ فشل GPU، الانتقال إلى CPU...")
-
-        logger.info("🖥️ استخدام MoviePy (CPU)...")
-        result = process_video_fallback(final_video_path, output_path)
-        
-        # تنظيف الملف المدموج المؤقت
-        if video2_path and final_video_path != video_path:
-            try:
-                os.unlink(final_video_path)
-            except:
-                pass
-        
-        if result:
-            logger.info("✅ تمت المعالجة بنجاح باستخدام CPU!")
-            return True
-        
-        return False
-
-    except Exception as e:
-        error_id, _ = log_detailed_error(e, "process_video_direct", {
-            'video_path': video_path,
-            'output_path': output_path,
-            'video2_path': video2_path
-        })
-        logger.error(f"❌ خطأ في المعالجة المباشرة [ID: {error_id}]: {str(e)}")
-        return False
-
 @app.route('/')
 def index():
     return render_template('index.html')

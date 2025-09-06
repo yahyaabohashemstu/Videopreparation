@@ -589,63 +589,6 @@ def process_video_task(self, video_path, output_path, video2_path=None):
         )
         raise
 
-def process_video_direct(video_path, output_path, video2_path=None):
-    """معالجة مباشرة بدون Celery (fallback mode)"""
-    try:
-        logger.info("🔍 بدء المعالجة المباشرة...")
-        
-        # دمج الفيديوهات إذا كان هناك فيديو ثاني
-        final_video_path = video_path
-        if video2_path:
-            logger.info("🔗 دمج الفيديوهات...")
-            merged_path = merge_videos(video_path, video2_path)
-            if merged_path:
-                final_video_path = merged_path
-            else:
-                logger.warning("⚠️ فشل دمج الفيديوهات، استخدام الفيديو الأول فقط")
-
-        # فحص GPU
-        gpu_supported = test_gpu_support()
-
-        if gpu_supported:
-            logger.info("🚀 استخدام GPU (NVENC)...")
-            if process_video_ffmpeg_gpu(final_video_path, output_path):
-                # تنظيف الملف المدموج المؤقت
-                if video2_path and final_video_path != video_path:
-                    try:
-                        os.unlink(final_video_path)
-                    except:
-                        pass
-                logger.info("✅ تمت المعالجة بنجاح باستخدام GPU!")
-                return True
-            else:
-                logger.warning("⚠️ فشل GPU، الانتقال إلى CPU...")
-
-        logger.info("🖥️ استخدام MoviePy (CPU)...")
-        result = process_video_fallback(final_video_path, output_path)
-        
-        # تنظيف الملف المدموج المؤقت
-        if video2_path and final_video_path != video_path:
-            try:
-                os.unlink(final_video_path)
-            except:
-                pass
-        
-        if result:
-            logger.info("✅ تمت المعالجة بنجاح باستخدام CPU!")
-            return True
-        
-        return False
-
-    except Exception as e:
-        error_id, _ = log_detailed_error(e, "process_video_direct", {
-            'video_path': video_path,
-            'output_path': output_path,
-            'video2_path': video2_path
-        })
-        logger.error(f"❌ خطأ في المعالجة المباشرة [ID: {error_id}]: {str(e)}")
-        return False
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -699,51 +642,16 @@ def upload_video():
         output_filename = f"output_{project_id}.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
-        # محاولة استخدام Celery، مع fallback للمعالجة المباشرة
-        try:
-            # فحص اتصال Redis أولاً
-            from redis import Redis
-            redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
-            r = Redis.from_url(redis_url, socket_connect_timeout=2)
-            r.ping()
-            
-            # إذا نجح الاتصال، استخدم Celery
-            task = process_video_task.apply_async(args=[video_path, output_path, video2_path])
-            
-            logger.info(f"✅ استخدام Celery - Task ID: {task.id}")
-            
-            return jsonify({
-                'success': True,
-                'job_id': task.id,
-                'status': 'queued',
-                'message': 'تم بدء معالجة الفيديو باستخدام Celery',
-                'output_filename': output_filename,
-                'mode': 'async'
-            })
-            
-        except Exception as redis_error:
-            # Fallback: معالجة مباشرة بدون Celery
-            logger.warning(f"⚠️ فشل Celery، استخدام المعالجة المباشرة: {redis_error}")
-            
-            # معالجة مباشرة (مع timeout أطول)
-            success = process_video_direct(video_path, output_path, video2_path)
-            
-            if success:
-                # تنظيف مجلد المشروع المؤقت
-                try:
-                    shutil.rmtree(project_folder)
-                except Exception:
-                    pass
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'تمت معالجة الفيديو بنجاح (معالجة مباشرة)',
-                    'download_url': f'/download/{output_filename}',
-                    'filename': output_filename,
-                    'mode': 'direct'
-                })
-            else:
-                return jsonify({'error': 'فشل في معالجة الفيديو'}), 500
+        # بدء مهمة Celery
+        task = process_video_task.apply_async(args=[video_path, output_path, video2_path])
+        
+        return jsonify({
+            'success': True,
+            'job_id': task.id,
+            'status': 'queued',
+            'message': 'تم بدء معالجة الفيديو',
+            'output_filename': output_filename
+        })
 
     except Exception as e:
         error_id, error_details = log_detailed_error(e, "upload_video", {
