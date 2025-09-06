@@ -1,0 +1,59 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+myenv/
+env/
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keep only essential documentation
+COOLIFY_DEPLOYMENT_GUIDE.md
+
+# Configuration files (keep only what's needed)
+.env*
+env.example
+
+# Temporary files
+temp-*
+*.tmp
+*.log
+
+# Test files
+test_*
+tests/
+
+# Large media files (examples)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.png
+*.jpg
+*.jpeg
+
+# Upload and output directories (will be created at runtime)
+uploads/
+outputs/
