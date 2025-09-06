@@ -25,6 +25,11 @@ app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH', 500 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 
+# مسارات الملفات الثابتة
+ASSETS_FOLDER = 'assets'
+WATERMARK_PATH = os.path.join(ASSETS_FOLDER, 'watermark.png')
+OUTRO_PATH = os.path.join(ASSETS_FOLDER, 'outro.mp4')
+
 # الامتدادات المسموح بها
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
@@ -101,7 +106,7 @@ def get_rtx_4060_settings():
         '-gpu', '0',               # استخدام أول GPU
     ]
 
-def process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path):
+def process_video_ffmpeg_gpu(video_path, output_path):
     """معالجة الفيديو باستخدام FFmpeg مع تسريع GPU (NVENC)"""
     temp_watermark_path = None
     temp_outro_path = None
@@ -115,7 +120,7 @@ def process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path
 
         # معلومات الفيديوهات
         video_info = get_video_info(video_path)
-        outro_info = get_video_info(outro_path)
+        outro_info = get_video_info(OUTRO_PATH)
         if not video_info or not outro_info:
             return False
 
@@ -139,7 +144,7 @@ def process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path
         temp_watermark_path = temp_watermark.name
         temp_watermark.close()
 
-        with Image.open(watermark_path) as img:
+        with Image.open(WATERMARK_PATH) as img:
             img = img.resize((width, height), Image.Resampling.LANCZOS)
             # ضبط ألفا 30%:
             if img.mode != 'RGBA':
@@ -158,7 +163,7 @@ def process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path
         temp_outro.close()
 
         outro_cmd = [
-            'ffmpeg', '-y', '-i', outro_path,
+            'ffmpeg', '-y', '-i', OUTRO_PATH,
             '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,'
                    f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
             '-c:v', encoder
@@ -262,13 +267,13 @@ def process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path
                 pass
         return False
 
-def process_video_fallback(video_path, watermark_path, outro_path, output_path):
+def process_video_fallback(video_path, output_path):
     """معالجة بديلة باستخدام MoviePy (CPU)"""
     try:
         # تحميل المقاطع
         video = VideoFileClip(video_path)
-        watermark = ImageClip(watermark_path).resize((video.w, video.h)).set_opacity(0.3)
-        outro = VideoFileClip(outro_path).resize((video.w, video.h))
+        watermark = ImageClip(WATERMARK_PATH).resize((video.w, video.h)).set_opacity(0.3)
+        outro = VideoFileClip(OUTRO_PATH).resize((video.w, video.h))
 
         # وضع العلامة المائية طوال مدة الفيديو
         wm_layer = watermark.set_position('center').set_duration(video.duration)
@@ -303,7 +308,7 @@ def process_video_fallback(video_path, watermark_path, outro_path, output_path):
         print(f"خطأ في معالجة الفيديو باستخدام MoviePy: {str(e)}")
         return False
 
-def process_video(video_path, watermark_path, outro_path, output_path):
+def process_video(video_path, output_path):
     """المعالجة الكاملة: تفضيل GPU ثم السقوط إلى CPU"""
     try:
         print("🔍 اختبار دعم GPU...")
@@ -311,13 +316,13 @@ def process_video(video_path, watermark_path, outro_path, output_path):
 
         if gpu_supported:
             print("🚀 استخدام GPU (NVENC)...")
-            if process_video_ffmpeg_gpu(video_path, watermark_path, outro_path, output_path):
+            if process_video_ffmpeg_gpu(video_path, output_path):
                 return True
             else:
                 print("⚠️ فشل GPU، الانتقال إلى CPU...")
 
         print("🖥️ استخدام MoviePy (CPU) كبديل...")
-        if process_video_fallback(video_path, watermark_path, outro_path, output_path):
+        if process_video_fallback(video_path, output_path):
             return True
 
         return False
@@ -333,43 +338,40 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_video():
     try:
-        # تحقق من وجود الملفات
-        if 'video' not in request.files or 'watermark' not in request.files or 'outro' not in request.files:
-            return jsonify({'error': 'جميع الملفات مطلوبة'}), 400
+        # تحقق من وجود ملف الفيديو فقط
+        if 'video' not in request.files:
+            return jsonify({'error': 'ملف الفيديو مطلوب'}), 400
 
         video_file = request.files['video']
-        watermark_file = request.files['watermark']
-        outro_file = request.files['outro']
 
-        # تحقق من أسماء الملفات
-        if video_file.filename == '' or watermark_file.filename == '' or outro_file.filename == '':
-            return jsonify({'error': 'يرجى اختيار جميع الملفات'}), 400
+        # تحقق من اسم الملف
+        if video_file.filename == '':
+            return jsonify({'error': 'يرجى اختيار ملف الفيديو'}), 400
 
-        # تحقق من الامتدادات
-        if not (allowed_file(video_file.filename, ALLOWED_EXTENSIONS) and
-                allowed_file(watermark_file.filename, ALLOWED_IMAGE_EXTENSIONS) and
-                allowed_file(outro_file.filename, ALLOWED_EXTENSIONS)):
-            return jsonify({'error': 'صيغة ملف غير مدعومة'}), 400
+        # تحقق من امتداد الفيديو
+        if not allowed_file(video_file.filename, ALLOWED_EXTENSIONS):
+            return jsonify({'error': 'صيغة فيديو غير مدعومة'}), 400
+            
+        # تحقق من وجود الملفات الثابتة
+        if not os.path.exists(WATERMARK_PATH):
+            return jsonify({'error': 'العلامة المائية غير موجودة'}), 500
+        if not os.path.exists(OUTRO_PATH):
+            return jsonify({'error': 'الأوترو غير موجود'}), 500
 
         # مشروع مؤقت بمعرف فريد
         project_id = str(uuid.uuid4())
         project_folder = os.path.join(app.config['UPLOAD_FOLDER'], project_id)
         os.makedirs(project_folder, exist_ok=True)
 
-        # حفظ الملفات
+        # حفظ ملف الفيديو فقط
         video_path = os.path.join(project_folder, secure_filename(video_file.filename))
-        watermark_path = os.path.join(project_folder, secure_filename(watermark_file.filename))
-        outro_path = os.path.join(project_folder, secure_filename(outro_file.filename))
-
         video_file.save(video_path)
-        watermark_file.save(watermark_path)
-        outro_file.save(outro_path)
 
         # ناتج المعالجة
         output_filename = f"output_{project_id}.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
-        success = process_video(video_path, watermark_path, outro_path, output_path)
+        success = process_video(video_path, output_path)
 
         if success:
             # تنظيف مدخلات المشروع المؤقتة

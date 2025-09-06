@@ -11,13 +11,9 @@ const errorText = document.getElementById("errorText");
 
 // File input elements
 const videoInput = document.getElementById("video");
-const watermarkInput = document.getElementById("watermark");
-const outroInput = document.getElementById("outro");
 
 // File info elements
 const videoInfo = document.getElementById("videoInfo");
-const watermarkInfo = document.getElementById("watermarkInfo");
-const outroInfo = document.getElementById("outroInfo");
 
 // Initialize file input listeners
 document.addEventListener("DOMContentLoaded", function () {
@@ -30,14 +26,6 @@ document.addEventListener("DOMContentLoaded", function () {
 function initializeFileInputs() {
   videoInput.addEventListener("change", function (e) {
     handleFileSelect(e.target, videoInfo, "video");
-  });
-
-  watermarkInput.addEventListener("change", function (e) {
-    handleFileSelect(e.target, watermarkInfo, "image");
-  });
-
-  outroInput.addEventListener("change", function (e) {
-    handleFileSelect(e.target, outroInfo, "video");
   });
 }
 
@@ -200,21 +188,9 @@ uploadForm.addEventListener("submit", async function (e) {
 // Validate form
 function validateForm() {
   const video = videoInput.files[0];
-  const watermark = watermarkInput.files[0];
-  const outro = outroInput.files[0];
 
   if (!video) {
-    showError("يرجى اختيار الفيديو الرئيسي");
-    return false;
-  }
-
-  if (!watermark) {
-    showError("يرجى اختيار العلامة المائية");
-    return false;
-  }
-
-  if (!outro) {
-    showError("يرجى اختيار فيديو الأوترو");
+    showError("يرجى اختيار ملف الفيديو");
     return false;
   }
 
@@ -267,8 +243,6 @@ function showResult(result) {
   // Reset form
   uploadForm.reset();
   videoInfo.innerHTML = "";
-  watermarkInfo.innerHTML = "";
-  outroInfo.innerHTML = "";
 
   // Reset button
   submitBtn.disabled = false;

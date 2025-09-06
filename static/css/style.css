@@ -283,6 +283,45 @@ body {
   margin-top: 0.5rem;
 }
 
+/* Fixed Assets Info */
+.info-section {
+  margin: 2rem 0;
+}
+
+.fixed-assets-info {
+  background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+  border: 2px solid #dee2e6;
+  border-radius: 15px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.fixed-assets-info h3 {
+  color: #495057;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.fixed-assets-info h3 i {
+  color: #667eea;
+  margin-left: 0.5rem;
+}
+
+.asset-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.asset-item i {
+  color: #28a745;
+  font-size: 1.1rem;
+}
+
 /* Progress Bar */
 .progress-container {
   margin-top: 2rem;

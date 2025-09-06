@@ -23,6 +23,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy application code
 COPY . .
 
+# Ensure assets directory exists and has proper permissions
+RUN chmod -R 755 assets/
+
 # Create necessary directories with proper permissions
 RUN mkdir -p uploads outputs \
     && chmod 755 uploads outputs

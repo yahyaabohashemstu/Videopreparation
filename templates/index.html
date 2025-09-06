@@ -68,7 +68,7 @@
         <div class="upload-container">
           <h2 class="section-title">رفع الفيديو</h2>
           <p class="section-description">
-            اختر الفيديو والعلامة المائية والأوترو
+            اختر الفيديو الذي تريد معالجته - العلامة المائية والأوترو ثابتان
           </p>
 
           <form
@@ -92,36 +92,18 @@
               <div class="file-info" id="videoInfo"></div>
             </div>
 
-            <div class="form-group">
-              <label for="watermark" class="form-label">
-                <i class="fas fa-image"></i>
-                العلامة المائية
-              </label>
-              <input
-                type="file"
-                id="watermark"
-                name="watermark"
-                accept="image/*"
-                required
-                class="form-input"
-              />
-              <div class="file-info" id="watermarkInfo"></div>
-            </div>
-
-            <div class="form-group">
-              <label for="outro" class="form-label">
-                <i class="fas fa-film"></i>
-                فيديو الأوترو
-              </label>
-              <input
-                type="file"
-                id="outro"
-                name="outro"
-                accept="video/*"
-                required
-                class="form-input"
-              />
-              <div class="file-info" id="outroInfo"></div>
+            <div class="info-section">
+              <div class="fixed-assets-info">
+                <h3><i class="fas fa-info-circle"></i> الملفات الثابتة</h3>
+                <div class="asset-item">
+                  <i class="fas fa-image"></i>
+                  <span>العلامة المائية: مُحددة مسبقاً (شفافية 30%)</span>
+                </div>
+                <div class="asset-item">
+                  <i class="fas fa-film"></i>
+                  <span>فيديو الأوترو: مُحدد مسبقاً</span>
+                </div>
+              </div>
             </div>
 
             <button
@@ -232,8 +214,8 @@
           <div class="step">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h3>رفع الملفات</h3>
-              <p>قم برفع الفيديو الرئيسي والعلامة المائية وفيديو الأوترو</p>
+              <h3>رفع الفيديو</h3>
+              <p>قم برفع الفيديو الرئيسي فقط - العلامة المائية والأوترو ثابتان</p>
             </div>
           </div>
           <div class="step">
