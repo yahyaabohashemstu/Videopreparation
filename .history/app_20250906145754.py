@@ -367,36 +367,24 @@ def merge_videos(video1_path, video2_path):
         print(f"❌ خطأ في دالة دمج الفيديوهات: {str(e)}")
         return None
 
-@celery.task(bind=True)
-def process_video_task(self, video_path, output_path, video2_path=None):
-    """مهمة Celery لمعالجة الفيديو"""
+def process_video(video_path, output_path, video2_path=None):
+    """المعالجة الكاملة: تفضيل GPU ثم السقوط إلى CPU"""
     try:
-        # تحديث حالة المهمة
-        self.update_state(state='PROCESSING', meta={'progress': 10, 'status': 'بدء المعالجة...'})
-        
         print("🔍 اختبار دعم GPU...")
         gpu_supported = test_gpu_support()
-        
-        # تحديث التقدم
-        self.update_state(state='PROCESSING', meta={'progress': 20, 'status': 'فحص دعم GPU...'})
 
         # دمج الفيديوهات إذا كان هناك فيديو ثاني
         final_video_path = video_path
         if video2_path:
             print("🔗 دمج الفيديوهات...")
-            self.update_state(state='PROCESSING', meta={'progress': 30, 'status': 'دمج الفيديوهات...'})
             merged_path = merge_videos(video_path, video2_path)
             if merged_path:
                 final_video_path = merged_path
             else:
                 print("⚠️ فشل دمج الفيديوهات، استخدام الفيديو الأول فقط")
 
-        # تحديث التقدم
-        self.update_state(state='PROCESSING', meta={'progress': 50, 'status': 'معالجة الفيديو...'})
-
         if gpu_supported:
             print("🚀 استخدام GPU (NVENC)...")
-            self.update_state(state='PROCESSING', meta={'progress': 60, 'status': 'معالجة بـ GPU...'})
             if process_video_ffmpeg_gpu(final_video_path, output_path):
                 # تنظيف الملف المدموج المؤقت إذا كان موجوداً
                 if video2_path and final_video_path != video_path:
@@ -405,14 +393,11 @@ def process_video_task(self, video_path, output_path, video2_path=None):
                         print("🧹 تم تنظيف الملف المدموج المؤقت")
                     except:
                         pass
-                
-                self.update_state(state='SUCCESS', meta={'progress': 100, 'status': 'تمت المعالجة بنجاح!'})
-                return {'status': 'completed', 'output_path': output_path}
+                return True
             else:
                 print("⚠️ فشل GPU، الانتقال إلى CPU...")
 
         print("🖥️ استخدام MoviePy (CPU) كبديل...")
-        self.update_state(state='PROCESSING', meta={'progress': 70, 'status': 'معالجة بـ CPU...'})
         result = process_video_fallback(final_video_path, output_path)
         
         # تنظيف الملف المدموج المؤقت إذا كان موجوداً
@@ -423,16 +408,11 @@ def process_video_task(self, video_path, output_path, video2_path=None):
             except:
                 pass
         
-        if result:
-            self.update_state(state='SUCCESS', meta={'progress': 100, 'status': 'تمت المعالجة بنجاح!'})
-            return {'status': 'completed', 'output_path': output_path}
-        else:
-            raise Exception("فشل في معالجة الفيديو")
+        return result
 
     except Exception as e:
         print(f"❌ خطأ عام في المعالجة: {str(e)}")
-        self.update_state(state='FAILURE', meta={'progress': 0, 'status': f'خطأ: {str(e)}'})
-        raise
+        return False
 
 @app.route('/')
 def index():
@@ -487,57 +467,26 @@ def upload_video():
         output_filename = f"output_{project_id}.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
-        # بدء مهمة Celery
-        task = process_video_task.apply_async(args=[video_path, output_path, video2_path])
-        
-        return jsonify({
-            'success': True,
-            'job_id': task.id,
-            'status': 'queued',
-            'message': 'تم بدء معالجة الفيديو',
-            'output_filename': output_filename
-        })
+        success = process_video(video_path, output_path, video2_path)
+
+        if success:
+            # تنظيف مدخلات المشروع المؤقتة
+            try:
+                shutil.rmtree(project_folder)
+            except Exception:
+                pass
+
+            return jsonify({
+                'success': True,
+                'message': 'تمت معالجة الفيديو بنجاح',
+                'download_url': f'/download/{output_filename}',
+                'filename': output_filename
+            })
+        else:
+            return jsonify({'error': 'فشل في معالجة الفيديو'}), 500
 
     except Exception as e:
         return jsonify({'error': f'خطأ في الخادم: {str(e)}'}), 500
-
-@app.route('/status/<task_id>')
-def task_status(task_id):
-    """تتبع حالة مهمة معالجة الفيديو"""
-    try:
-        task = process_video_task.AsyncResult(task_id)
-        
-        if task.state == 'PENDING':
-            response = {
-                'state': task.state,
-                'status': 'في الانتظار...',
-                'progress': 0
-            }
-        elif task.state == 'PROCESSING':
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'جاري المعالجة...'),
-                'progress': task.info.get('progress', 0)
-            }
-        elif task.state == 'SUCCESS':
-            response = {
-                'state': task.state,
-                'status': 'تمت المعالجة بنجاح!',
-                'progress': 100,
-                'result': task.info
-            }
-        else:  # FAILURE
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'حدث خطأ في المعالجة'),
-                'progress': 0,
-                'error': str(task.info)
-            }
-        
-        return jsonify(response)
-    
-    except Exception as e:
-        return jsonify({'error': f'خطأ في استعلام الحالة: {str(e)}'}), 500
 
 @app.route('/download/<filename>')
 def download_file(filename):

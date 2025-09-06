@@ -487,57 +487,26 @@ def upload_video():
         output_filename = f"output_{project_id}.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
-        # بدء مهمة Celery
-        task = process_video_task.apply_async(args=[video_path, output_path, video2_path])
-        
-        return jsonify({
-            'success': True,
-            'job_id': task.id,
-            'status': 'queued',
-            'message': 'تم بدء معالجة الفيديو',
-            'output_filename': output_filename
-        })
+        success = process_video(video_path, output_path, video2_path)
+
+        if success:
+            # تنظيف مدخلات المشروع المؤقتة
+            try:
+                shutil.rmtree(project_folder)
+            except Exception:
+                pass
+
+            return jsonify({
+                'success': True,
+                'message': 'تمت معالجة الفيديو بنجاح',
+                'download_url': f'/download/{output_filename}',
+                'filename': output_filename
+            })
+        else:
+            return jsonify({'error': 'فشل في معالجة الفيديو'}), 500
 
     except Exception as e:
         return jsonify({'error': f'خطأ في الخادم: {str(e)}'}), 500
-
-@app.route('/status/<task_id>')
-def task_status(task_id):
-    """تتبع حالة مهمة معالجة الفيديو"""
-    try:
-        task = process_video_task.AsyncResult(task_id)
-        
-        if task.state == 'PENDING':
-            response = {
-                'state': task.state,
-                'status': 'في الانتظار...',
-                'progress': 0
-            }
-        elif task.state == 'PROCESSING':
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'جاري المعالجة...'),
-                'progress': task.info.get('progress', 0)
-            }
-        elif task.state == 'SUCCESS':
-            response = {
-                'state': task.state,
-                'status': 'تمت المعالجة بنجاح!',
-                'progress': 100,
-                'result': task.info
-            }
-        else:  # FAILURE
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'حدث خطأ في المعالجة'),
-                'progress': 0,
-                'error': str(task.info)
-            }
-        
-        return jsonify(response)
-    
-    except Exception as e:
-        return jsonify({'error': f'خطأ في استعلام الحالة: {str(e)}'}), 500
 
 @app.route('/download/<filename>')
 def download_file(filename):

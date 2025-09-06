@@ -501,44 +501,6 @@ def upload_video():
     except Exception as e:
         return jsonify({'error': f'خطأ في الخادم: {str(e)}'}), 500
 
-@app.route('/status/<task_id>')
-def task_status(task_id):
-    """تتبع حالة مهمة معالجة الفيديو"""
-    try:
-        task = process_video_task.AsyncResult(task_id)
-        
-        if task.state == 'PENDING':
-            response = {
-                'state': task.state,
-                'status': 'في الانتظار...',
-                'progress': 0
-            }
-        elif task.state == 'PROCESSING':
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'جاري المعالجة...'),
-                'progress': task.info.get('progress', 0)
-            }
-        elif task.state == 'SUCCESS':
-            response = {
-                'state': task.state,
-                'status': 'تمت المعالجة بنجاح!',
-                'progress': 100,
-                'result': task.info
-            }
-        else:  # FAILURE
-            response = {
-                'state': task.state,
-                'status': task.info.get('status', 'حدث خطأ في المعالجة'),
-                'progress': 0,
-                'error': str(task.info)
-            }
-        
-        return jsonify(response)
-    
-    except Exception as e:
-        return jsonify({'error': f'خطأ في استعلام الحالة: {str(e)}'}), 500
-
 @app.route('/download/<filename>')
 def download_file(filename):
     try:

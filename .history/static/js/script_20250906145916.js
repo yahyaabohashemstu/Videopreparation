@@ -212,7 +212,18 @@ function showProgress() {
     '<i class="fas fa-spinner fa-spin"></i> جاري المعالجة...';
 }
 
-// تم حذف simulateProgress - نستخدم التقدم الحقيقي من Celery الآن
+// Simulate progress
+function simulateProgress() {
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 15;
+    if (progress > 90) {
+      progress = 90;
+      clearInterval(interval);
+    }
+    updateProgress(progress);
+  }, 200);
+}
 
 // Update progress bar
 function updateProgress(percentage, status = null) {

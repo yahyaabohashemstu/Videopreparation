@@ -169,7 +169,8 @@ uploadForm.addEventListener("submit", async function (e) {
   try {
     const formData = new FormData(uploadForm);
 
-    // سيتم تتبع التقدم الحقيقي من Celery
+    // Simulate progress
+    simulateProgress();
 
     const API_BASE = window.API_BASE || "http://localhost:5000";
     const response = await fetch(`${API_BASE}/upload`, {
@@ -212,67 +213,23 @@ function showProgress() {
     '<i class="fas fa-spinner fa-spin"></i> جاري المعالجة...';
 }
 
-// تم حذف simulateProgress - نستخدم التقدم الحقيقي من Celery الآن
-
-// Update progress bar
-function updateProgress(percentage, status = null) {
-  progressFill.style.width = `${percentage}%`;
-  if (status) {
-    progressText.textContent = `${status} ${Math.round(percentage)}%`;
-  } else {
-    progressText.textContent = `جاري المعالجة... ${Math.round(percentage)}%`;
-  }
+// Simulate progress
+function simulateProgress() {
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 15;
+    if (progress > 90) {
+      progress = 90;
+      clearInterval(interval);
+    }
+    updateProgress(progress);
+  }, 200);
 }
 
-// Track job progress
-async function trackJobProgress(jobId, outputFilename) {
-  const pollInterval = 2000; // 2 seconds
-  let attempts = 0;
-  const maxAttempts = 300; // 10 minutes maximum
-  
-  const poll = async () => {
-    try {
-      attempts++;
-      
-      const response = await fetch(`${API_BASE}/status/${jobId}`);
-      const status = await response.json();
-      
-      console.log('Job status:', status);
-      
-      if (status.state === 'PENDING') {
-        updateProgress(5, 'في الانتظار...');
-      } else if (status.state === 'PROCESSING') {
-        updateProgress(status.progress || 0, status.status);
-      } else if (status.state === 'SUCCESS') {
-        updateProgress(100, 'تمت المعالجة بنجاح!');
-        showResult({
-          success: true,
-          message: 'تمت معالجة الفيديو بنجاح',
-          download_url: `/download/${outputFilename}`,
-          filename: outputFilename
-        });
-        return; // Stop polling
-      } else {
-        // FAILURE or other error states
-        showError(status.status || status.error || 'حدث خطأ في المعالجة');
-        return; // Stop polling
-      }
-      
-      // Continue polling if not finished and within limits
-      if (attempts < maxAttempts) {
-        setTimeout(poll, pollInterval);
-      } else {
-        showError('انتهت مهلة المعالجة. يرجى المحاولة مرة أخرى.');
-      }
-      
-    } catch (error) {
-      console.error('Error polling status:', error);
-      showError('خطأ في تتبع حالة المعالجة');
-    }
-  };
-  
-  // Start polling
-  poll();
+// Update progress bar
+function updateProgress(percentage) {
+  progressFill.style.width = `${percentage}%`;
+  progressText.textContent = `جاري المعالجة... ${Math.round(percentage)}%`;
 }
 
 // Show result
