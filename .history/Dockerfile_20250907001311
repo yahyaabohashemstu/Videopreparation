@@ -1,0 +1,61 @@
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    curl \
+    gcc \
+    python3-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Ensure assets directory exists and has proper permissions
+RUN chmod -R 755 assets/ || true
+
+# Create necessary directories with proper permissions
+RUN mkdir -p uploads outputs \
+    && chmod 755 uploads outputs
+
+# Create /data directories for shared volumes
+RUN mkdir -p /data/uploads /data/outputs && chmod -R 777 /data
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app /data /uploads /outputs
+USER appuser
+
+# Expose port (used only in API mode)
+EXPOSE 5000
+
+# Set environment variables
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
+
+# Health check (only works in API mode)
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# 👇 Run API or Celery Worker depending on WORKER_MODE
+CMD sh -c 'if [ "$WORKER_MODE" = "celery" ]; then \
+              celery -A app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2}; \
+           else \
+              gunicorn --bind 0.0.0.0:5000 --workers=${GUNICORN_WORKERS:-2} --threads=${GUNICORN_THREADS:-8} --timeout=300 app:app; \
+           fi'

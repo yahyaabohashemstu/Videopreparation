@@ -160,15 +160,6 @@ ASSETS_FOLDER = 'assets'
 WATERMARK_PATH = os.path.join(ASSETS_FOLDER, 'watermark.png')
 OUTRO_PATH = os.path.join(ASSETS_FOLDER, 'outro.mp4')
 
-# التحقق من وجود الملفات الثابتة عند بدء التطبيق
-if not os.path.exists(WATERMARK_PATH):
-    logger.error(f"❌ العلامة المائية غير موجودة: {WATERMARK_PATH}")
-if not os.path.exists(OUTRO_PATH):
-    logger.error(f"❌ الأوترو غير موجود: {OUTRO_PATH}")
-
-logger.info(f"✅ مسار العلامة المائية: {WATERMARK_PATH}")
-logger.info(f"✅ مسار الأوترو: {OUTRO_PATH}")
-
 # الامتدادات المسموح بها
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}

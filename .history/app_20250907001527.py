@@ -169,6 +169,11 @@ if not os.path.exists(OUTRO_PATH):
 logger.info(f"✅ مسار العلامة المائية: {WATERMARK_PATH}")
 logger.info(f"✅ مسار الأوترو: {OUTRO_PATH}")
 
+# مسارات الملفات الثابتة
+ASSETS_FOLDER = 'assets'
+WATERMARK_PATH = os.path.join(ASSETS_FOLDER, 'watermark.png')
+OUTRO_PATH = os.path.join(ASSETS_FOLDER, 'outro.mp4')
+
 # الامتدادات المسموح بها
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
