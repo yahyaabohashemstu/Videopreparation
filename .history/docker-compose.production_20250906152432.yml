@@ -39,27 +39,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-     command:
-       [
-         "gunicorn",
-         "--bind",
-         "0.0.0.0:5000",
-         "--workers",
-         "4",
-         "--timeout",
-         "600",
-         "--worker-class",
-         "sync",
-         "--max-requests",
-         "1000",
-         "app:app",
-       ]
-     deploy:
-       resources:
-         limits:
-           memory: 4G
-         reservations:
-           memory: 1G
+    command:
+      [
+        "gunicorn",
+        "--bind",
+        "0.0.0.0:5000",
+        "--workers",
+        "2",
+        "--timeout",
+        "300",
+        "app:app",
+      ]
 
   video-processor-worker:
     build: .
@@ -86,12 +76,6 @@ services:
          "--prefetch-multiplier=1",
          "--optimization=speed",
        ]
-     deploy:
-       resources:
-         limits:
-           memory: 6G
-         reservations:
-           memory: 2G
 
 volumes:
   redis_data:

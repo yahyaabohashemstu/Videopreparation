@@ -336,40 +336,19 @@ def merge_videos(video1_path, video2_path):
         merged_path = merged_file.name
         merged_file.close()
 
-        # أمر FFmpeg لدمج الفيديوهات بسرعة فائقة
-        encoder = get_nvenc_encoder()
-        if encoder:
-            # استخدام GPU للدمج
-            merge_cmd = [
-                'ffmpeg', '-y',
-                '-i', video1_path,
-                '-i', video2_path,
-                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                '-map', '[outv]',
-                '-map', '[outa]',
-                '-c:v', encoder,
-                '-c:a', 'aac',
-                '-preset', 'p1',          # أسرع preset
-                '-tune', 'll',            # Low latency
-                '-rc', 'cbr',
-                '-b:v', '4M',
-                merged_path
-            ]
-        else:
-            # استخدام CPU مع أسرع إعدادات
-            merge_cmd = [
-                'ffmpeg', '-y',
-                '-i', video1_path,
-                '-i', video2_path,
-                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                '-map', '[outv]',
-                '-map', '[outa]',
-                '-c:v', 'libx264',
-                '-c:a', 'aac',
-                '-preset', 'ultrafast',   # أسرع preset للـ CPU
-                '-crf', '28',             # جودة أقل للسرعة
-                merged_path
-            ]
+        # أمر FFmpeg لدمج الفيديوهات
+        merge_cmd = [
+            'ffmpeg', '-y',
+            '-i', video1_path,
+            '-i', video2_path,
+            '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+            '-map', '[outv]',
+            '-map', '[outa]',
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-preset', 'medium',
+            merged_path
+        ]
 
         print(f"أمر دمج الفيديوهات: {' '.join(merge_cmd)}")
         result = subprocess.run(merge_cmd, capture_output=True, text=True)

@@ -86,12 +86,6 @@ services:
          "--prefetch-multiplier=1",
          "--optimization=speed",
        ]
-     deploy:
-       resources:
-         limits:
-           memory: 6G
-         reservations:
-           memory: 2G
 
 volumes:
   redis_data:

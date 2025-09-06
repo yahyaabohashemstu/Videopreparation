@@ -253,7 +253,7 @@ def process_video_ffmpeg_gpu(video_path, output_path):
         ]
         final_cmd.extend(map_args)
         final_cmd.extend(['-c:v', encoder])
-        final_cmd.extend(get_ultra_fast_settings())
+        final_cmd.extend(get_rtx_4060_settings())
         final_cmd.extend(audio_codec)
         final_cmd.extend(['-movflags', '+faststart'])
         final_cmd.append(output_path)
@@ -304,16 +304,15 @@ def process_video_fallback(video_path, output_path):
             outro.set_position('center').set_start(video.duration)
         ])
 
-        # حفظ الناتج بإعدادات فائقة السرعة
+        # حفظ الناتج بإعدادات سريعة
         final_timeline.write_videofile(
             output_path,
             codec='libx264',
             audio_codec='aac',
             temp_audiofile='temp-audio.m4a',
             remove_temp=True,
-            threads=16,                    # زيادة عدد threads
-            preset='ultrafast',            # أسرع preset
-            ffmpeg_params=['-crf', '28'],  # جودة أقل للسرعة
+            threads=8,
+            preset='ultrafast',
             verbose=False,
             logger=None
         )
@@ -336,40 +335,19 @@ def merge_videos(video1_path, video2_path):
         merged_path = merged_file.name
         merged_file.close()
 
-        # أمر FFmpeg لدمج الفيديوهات بسرعة فائقة
-        encoder = get_nvenc_encoder()
-        if encoder:
-            # استخدام GPU للدمج
-            merge_cmd = [
-                'ffmpeg', '-y',
-                '-i', video1_path,
-                '-i', video2_path,
-                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                '-map', '[outv]',
-                '-map', '[outa]',
-                '-c:v', encoder,
-                '-c:a', 'aac',
-                '-preset', 'p1',          # أسرع preset
-                '-tune', 'll',            # Low latency
-                '-rc', 'cbr',
-                '-b:v', '4M',
-                merged_path
-            ]
-        else:
-            # استخدام CPU مع أسرع إعدادات
-            merge_cmd = [
-                'ffmpeg', '-y',
-                '-i', video1_path,
-                '-i', video2_path,
-                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                '-map', '[outv]',
-                '-map', '[outa]',
-                '-c:v', 'libx264',
-                '-c:a', 'aac',
-                '-preset', 'ultrafast',   # أسرع preset للـ CPU
-                '-crf', '28',             # جودة أقل للسرعة
-                merged_path
-            ]
+        # أمر FFmpeg لدمج الفيديوهات
+        merge_cmd = [
+            'ffmpeg', '-y',
+            '-i', video1_path,
+            '-i', video2_path,
+            '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+            '-map', '[outv]',
+            '-map', '[outa]',
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-preset', 'medium',
+            merged_path
+        ]
 
         print(f"أمر دمج الفيديوهات: {' '.join(merge_cmd)}")
         result = subprocess.run(merge_cmd, capture_output=True, text=True)
