@@ -633,8 +633,12 @@ def process_video_direct(video_path, output_path, video2_path=None):
         logger.info("🖥️ استخدام FFmpeg CPU...")
         result = process_video_fallback(final_video_path, output_path)
         
-        # تنظيف مركزي مضمون
-        cleanup_temp_files(video2_path, final_video_path, video_path)
+        # تنظيف الملف المدموج المؤقت
+        if video2_path and final_video_path != video_path:
+            try:
+                os.unlink(final_video_path)
+            except:
+                pass
         
         if result:
             logger.info("✅ تمت المعالجة بنجاح باستخدام CPU!")

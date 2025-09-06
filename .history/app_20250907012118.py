@@ -194,15 +194,16 @@ def get_video_info(video_path):
 
 def get_nvenc_encoder():
     """
-    تحديد دعم h264_nvenc فقط (أسرع وأكثر توافقاً من HEVC)
-    يعاد 'h264_nvenc' أو None إذا غير مدعوم.
+    تحديد الـ NVENC المتوفر: يفضّل HEVC وإن لم يتوفر يستخدم H.264.
+    يعاد 'hevc_nvenc' أو 'h264_nvenc' أو None إذا غير مدعوم.
     """
     try:
         res = subprocess.run(['ffmpeg', '-encoders'], capture_output=True, text=True)
         if res.returncode != 0:
             return None
         encs = res.stdout
-        # نستخدم h264_nvenc فقط للسرعة القصوى
+        if 'hevc_nvenc' in encs:
+            return 'hevc_nvenc'
         if 'h264_nvenc' in encs:
             return 'h264_nvenc'
         return None
@@ -436,16 +437,16 @@ def process_video_fallback(video_path, output_path):
             return False
 
 def merge_videos(video1_path, video2_path):
-    """دمج فيديوهين معاً باستخدام FFmpeg مع تنظيف مضمون"""
-    # إنشاء ملف مؤقت للفيديو المدموج
-    merged_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-    merged_path = merged_file.name
-    merged_file.close()
-
+    """دمج فيديوهين معاً باستخدام FFmpeg"""
     try:
+        # إنشاء ملف مؤقت للفيديو المدموج
+        merged_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+        merged_path = merged_file.name
+        merged_file.close()
+
         # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
         encoder = get_nvenc_encoder()
-        if encoder == 'h264_nvenc':
+        if encoder and 'h264_nvenc' in encoder:
             # استخدام GPU للدمج
             merge_cmd = [
                 'ffmpeg', '-y',
@@ -458,7 +459,7 @@ def merge_videos(video1_path, video2_path):
                 '-c:a', 'aac',
                 '-preset', 'p1',
                 '-cq', '23',
-                '-b:v', '8M',
+                '-b:v', '6M',
                 merged_path
             ]
         else:
@@ -473,50 +474,28 @@ def merge_videos(video1_path, video2_path):
                 '-c:v', 'libx264',
                 '-c:a', 'aac',
                 '-preset', 'ultrafast',
-                '-crf', '26',
-                '-threads', '0',
+                '-crf', '26',             # جودة محسنة (26 بدل 28)
                 merged_path
             ]
 
-        logger.info(f"🔗 دمج الفيديوهات: {' '.join(merge_cmd)}")
+        print(f"أمر دمج الفيديوهات: {' '.join(merge_cmd)}")
         result = subprocess.run(merge_cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
-            logger.info("✅ تم دمج الفيديوهات بنجاح")
+            print("✅ تم دمج الفيديوهات بنجاح")
             return merged_path
         else:
-            logger.error(f"❌ خطأ في دمج الفيديوهات: {result.stderr}")
+            print(f"❌ خطأ في دمج الفيديوهات: {result.stderr}")
+            # حذف الملف المؤقت في حالة الفشل
+            try:
+                os.unlink(merged_path)
+            except:
+                pass
             return None
 
     except Exception as e:
-        error_id, _ = log_detailed_error(e, "merge_videos", {
-            'video1_path': video1_path,
-            'video2_path': video2_path,
-            'merged_path': merged_path
-        })
-        logger.error(f"❌ خطأ في دالة دمج الفيديوهات [ID: {error_id}]: {str(e)}")
+        print(f"❌ خطأ في دالة دمج الفيديوهات: {str(e)}")
         return None
-    
-    finally:
-        # تنظيف مضمون في حالة الفشل
-        if os.path.exists(merged_path):
-            try:
-                # التحقق من نجاح العملية قبل الإرجاع
-                if result.returncode != 0:
-                    os.unlink(merged_path)
-                    logger.info("🧹 تم حذف الملف المدموج الفاشل")
-            except:
-                pass
-
-def cleanup_temp_files(video2_path, final_video_path, original_video_path):
-    """تنظيف مركزي مضمون للملفات المؤقتة"""
-    try:
-        if video2_path and final_video_path != original_video_path:
-            if os.path.exists(final_video_path):
-                os.unlink(final_video_path)
-                logger.info("🧹 تم تنظيف الملف المدموج المؤقت")
-    except Exception as e:
-        logger.warning(f"⚠️ فشل في تنظيف الملف المؤقت: {str(e)}")
 
 @celery.task(bind=True)
 def process_video_task(self, video_path, output_path, video2_path=None):
@@ -566,8 +545,13 @@ def process_video_task(self, video_path, output_path, video2_path=None):
         self.update_state(state='PROCESSING', meta={'progress': 70, 'status': 'معالجة بـ FFmpeg CPU...'})
         result = process_video_fallback(final_video_path, output_path)
         
-        # تنظيف مركزي مضمون
-        cleanup_temp_files(video2_path, final_video_path, video_path)
+        # تنظيف الملف المدموج المؤقت إذا كان موجوداً
+        if video2_path and final_video_path != video_path:
+            try:
+                os.unlink(final_video_path)
+                print("🧹 تم تنظيف الملف المدموج المؤقت")
+            except:
+                pass
         
         if result:
             self.update_state(state='SUCCESS', meta={'progress': 100, 'status': 'تمت المعالجة بنجاح!'})
@@ -633,8 +617,12 @@ def process_video_direct(video_path, output_path, video2_path=None):
         logger.info("🖥️ استخدام FFmpeg CPU...")
         result = process_video_fallback(final_video_path, output_path)
         
-        # تنظيف مركزي مضمون
-        cleanup_temp_files(video2_path, final_video_path, video_path)
+        # تنظيف الملف المدموج المؤقت
+        if video2_path and final_video_path != video_path:
+            try:
+                os.unlink(final_video_path)
+            except:
+                pass
         
         if result:
             logger.info("✅ تمت المعالجة بنجاح باستخدام CPU!")

@@ -1,0 +1,75 @@
+version: "3.8"
+
+networks:
+  video_network:
+    driver: bridge
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - video_network
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  video-processor-api:
+    build: .
+    ports:
+      - "5000:5000"
+    networks:
+      - video_network
+    volumes:
+      - uploads_data:/data/uploads
+      - outputs_data:/data/outputs
+    environment:
+      - FLASK_ENV=production
+      - MAX_CONTENT_LENGTH=524288000
+      - SECRET_KEY=${SECRET_KEY:-fallback-secret-key}
+      - PORT=5000
+      - DEBUG=false
+      - UPLOAD_FOLDER=/data/uploads
+      - OUTPUT_FOLDER=/data/outputs
+      - GUNICORN_WORKERS=3
+      - GUNICORN_THREADS=8
+      - REDIS_URL=redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  video-processor-worker:
+    build: .
+    networks:
+      - video_network
+    volumes:
+      - uploads_data:/data/uploads
+      - outputs_data:/data/outputs
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-fallback-secret-key}
+      - REDIS_URL=redis://redis:6379/0
+      - UPLOAD_FOLDER=/data/uploads
+      - OUTPUT_FOLDER=/data/outputs
+      - WORKER_MODE=celery
+      - CELERY_CONCURRENCY=3
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  uploads_data:
+  outputs_data:

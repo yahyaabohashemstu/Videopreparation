@@ -508,16 +508,6 @@ def merge_videos(video1_path, video2_path):
             except:
                 pass
 
-def cleanup_temp_files(video2_path, final_video_path, original_video_path):
-    """تنظيف مركزي مضمون للملفات المؤقتة"""
-    try:
-        if video2_path and final_video_path != original_video_path:
-            if os.path.exists(final_video_path):
-                os.unlink(final_video_path)
-                logger.info("🧹 تم تنظيف الملف المدموج المؤقت")
-    except Exception as e:
-        logger.warning(f"⚠️ فشل في تنظيف الملف المؤقت: {str(e)}")
-
 @celery.task(bind=True)
 def process_video_task(self, video_path, output_path, video2_path=None):
     """مهمة Celery لمعالجة الفيديو"""
@@ -633,8 +623,12 @@ def process_video_direct(video_path, output_path, video2_path=None):
         logger.info("🖥️ استخدام FFmpeg CPU...")
         result = process_video_fallback(final_video_path, output_path)
         
-        # تنظيف مركزي مضمون
-        cleanup_temp_files(video2_path, final_video_path, video_path)
+        # تنظيف الملف المدموج المؤقت
+        if video2_path and final_video_path != video_path:
+            try:
+                os.unlink(final_video_path)
+            except:
+                pass
         
         if result:
             logger.info("✅ تمت المعالجة بنجاح باستخدام CPU!")
