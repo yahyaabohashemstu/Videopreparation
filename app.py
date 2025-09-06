@@ -234,180 +234,114 @@ def test_gpu_support():
         print(f"❌ خطأ في اختبار GPU [ID: {error_id}]: {e}")
         return False
 
-def get_ultra_fast_settings():
-    """إعدادات NVENC فائقة السرعة للمعالجة السريعة"""
+def get_optimized_nvenc_settings():
+    """إعدادات NVENC محسنة للسرعة والجودة المتوازنة"""
     return [
-        '-preset', 'p1',           # أسرع preset ممكن (p1 = fastest)
-        '-tune', 'll',             # Low Latency للسرعة القصوى
-        '-rc', 'cbr',              # Constant bitrate للسرعة
-        '-cq', '25',               # جودة أقل للسرعة (25 بدل 18)
-        '-b:v', '4M',              # معدل بت أقل للسرعة
-        '-maxrate', '6M',          # أقصى معدل بت أقل
-        '-bufsize', '8M',          # بفر أصغر للسرعة
+        '-preset', 'p1',           # أسرع preset
+        '-cq', '23',               # جودة متوازنة (23 بدل 25)
+        '-b:v', '6M',              # معدل بت متوسط
+        '-maxrate', '8M',          # أقصى معدل بت
+        '-bufsize', '12M',         # بفر متوسط
         '-gpu', '0',               # استخدام أول GPU
-        '-2pass', '0',             # تعطيل 2-pass للسرعة
+        '-spatial-aq', '1',        # تحسين جودة المناطق
+        '-temporal-aq', '1',       # تحسين جودة الحركة
     ]
 
 def process_video_ffmpeg_gpu(video_path, output_path):
-    """معالجة الفيديو باستخدام FFmpeg مع تسريع GPU (NVENC)"""
-    temp_watermark_path = None
-    temp_outro_path = None
-    temp_watermarked_path = None
+    """معالجة الفيديو باستخدام FFmpeg مع تسريع GPU في تمرير واحد"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            # استخدام h264_nvenc فقط (أسرع وأكثر توافقاً)
+            encoder = 'h264_nvenc'
+            
+            # التحقق من دعم NVENC
+            nvenc_available = get_nvenc_encoder()
+            if not nvenc_available or 'h264_nvenc' not in nvenc_available:
+                print("❌ h264_nvenc غير متوفر، استخدم CPU")
+                return False
 
-    try:
-        encoder = get_nvenc_encoder()
-        if not encoder:
-            print("NVENC غير متوفر، لا يمكن استخدام معالجة GPU.")
+            # معلومات الفيديوهات
+            video_info = get_video_info(video_path)
+            outro_info = get_video_info(OUTRO_PATH)
+            if not video_info or not outro_info:
+                return False
+
+            video_stream = next((s for s in video_info['streams'] if s['codec_type'] == 'video'), None)
+            if not video_stream:
+                return False
+
+            width = int(video_stream['width'])
+            height = int(video_stream['height'])
+            video_has_audio = any(s['codec_type'] == 'audio' for s in video_info['streams'])
+            outro_has_audio = any(s['codec_type'] == 'audio' for s in outro_info['streams'])
+
+            print(f"🚀 معالجة GPU في تمرير واحد: {width}x{height}")
+
+            # بناء filter_complex للمعالجة الكاملة في تمرير واحد
+            if video_has_audio and outro_has_audio:
+                filter_complex = (
+                    f'[0:v]scale={width}:{height}[v0];'
+                    f'[1:v]scale={width}:{height}[v1];'
+                    f'[v0][v1]overlay=0:0:enable=\'between(t,0,{float(video_info["format"]["duration"])})\':format=auto,'
+                    f'colorchannelmixer=aa=0.3[v0_wm];'
+                    f'[v0_wm][0:a][v1][1:a]concat=n=2:v=1:a=1[outv][outa]'
+                )
+                map_args = ['-map', '[outv]', '-map', '[outa]']
+                audio_codec = ['-c:a', 'aac', '-b:a', '128k']
+            elif video_has_audio and not outro_has_audio:
+                filter_complex = (
+                    f'[0:v]scale={width}:{height}[v0];'
+                    f'[1:v]scale={width}:{height}[v1];'
+                    f'[v0][v1]overlay=0:0:enable=\'between(t,0,{float(video_info["format"]["duration"])})\':format=auto,'
+                    f'colorchannelmixer=aa=0.3[v0_wm];'
+                    f'[v0_wm][0:a][v1]concat=n=2:v=1:a=1[outv][outa]'
+                )
+                map_args = ['-map', '[outv]', '-map', '[outa]']
+                audio_codec = ['-c:a', 'copy']
+            else:
+                filter_complex = (
+                    f'[0:v]scale={width}:{height}[v0];'
+                    f'[1:v]scale={width}:{height}[v1];'
+                    f'[v0][v1]overlay=0:0:enable=\'between(t,0,{float(video_info["format"]["duration"])})\':format=auto,'
+                    f'colorchannelmixer=aa=0.3[v0_wm];'
+                    f'[v0_wm][v1]concat=n=2:v=1[outv]'
+                )
+                map_args = ['-map', '[outv]']
+                audio_codec = ['-an']
+
+            # أمر FFmpeg واحد للمعالجة الكاملة
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', video_path,
+                '-i', OUTRO_PATH,
+                '-filter_complex', filter_complex
+            ]
+            cmd.extend(map_args)
+            cmd.extend(['-c:v', encoder])
+            cmd.extend(get_optimized_nvenc_settings())
+            cmd.extend(audio_codec)
+            cmd.extend(['-movflags', '+faststart'])
+            cmd.append(output_path)
+
+            print("🚀 معالجة GPU في تمرير واحد...")
+            print(f"أمر FFmpeg: {' '.join(cmd)}")
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ تمت المعالجة بنجاح في تمرير واحد!")
+                return True
+            else:
+                print(f"❌ خطأ في المعالجة: {result.stderr}")
+                return False
+
+        except Exception as e:
+            error_id, _ = log_detailed_error(e, "process_video_ffmpeg_gpu", {
+                'video_path': video_path,
+                'output_path': output_path,
+                'encoder': encoder
+            })
+            print(f"❌ خطأ في معالجة GPU [ID: {error_id}]: {str(e)}")
             return False
-
-        # معلومات الفيديوهات
-        video_info = get_video_info(video_path)
-        outro_info = get_video_info(OUTRO_PATH)
-        if not video_info or not outro_info:
-            return False
-
-        video_stream = next((s for s in video_info['streams'] if s['codec_type'] == 'video'), None)
-        outro_stream = next((s for s in outro_info['streams'] if s['codec_type'] == 'video'), None)
-        if not video_stream or not outro_stream:
-            return False
-
-        width = int(video_stream['width'])
-        height = int(video_stream['height'])
-        duration = float(video_info['format']['duration'])
-        video_has_audio = any(s['codec_type'] == 'audio' for s in video_info['streams'])
-        outro_has_audio = any(s['codec_type'] == 'audio' for s in outro_info['streams'])
-
-        print(f"معالجة فيديو: {width}x{height}, المدة: {duration:.2f} ثانية")
-        print(f"الفيديو الرئيسي يحتوي على صوت: {video_has_audio}")
-        print(f"الأوترو يحتوي على صوت: {outro_has_audio}")
-
-        # 1) تحضير صورة العلامة المائية بشفافية 30% وبنفس أبعاد الفيديو
-        temp_watermark = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-        temp_watermark_path = temp_watermark.name
-        temp_watermark.close()
-
-        with Image.open(WATERMARK_PATH) as img:
-            img = img.resize((width, height), Image.Resampling.LANCZOS)
-            # ضبط ألفا 30%:
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-            r, g, b, a = img.split()
-            # تعيين ألفا ثابت 30% عبر الصورة كلها
-            a = a.point(lambda x: int(255 * 0.3))
-            img = Image.merge('RGBA', (r, g, b, a))
-            img.save(temp_watermark_path, 'PNG')
-
-        print("تم تحضير العلامة المائية")
-
-        # 2) تحضير الأوترو بنفس أبعاد الفيديو
-        temp_outro = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-        temp_outro_path = temp_outro.name
-        temp_outro.close()
-
-        outro_cmd = [
-            'ffmpeg', '-y', '-i', OUTRO_PATH,
-            '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,'
-                   f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2',
-            '-c:v', encoder
-        ]
-        outro_cmd.extend(get_ultra_fast_settings())
-        if outro_has_audio:
-            outro_cmd.extend(['-c:a', 'aac', '-b:a', '128k'])
-        else:
-            outro_cmd.extend(['-an'])
-        outro_cmd.append(temp_outro_path)
-
-        print("معالجة الأوترو...")
-        print(f"أمر الأوترو: {' '.join(outro_cmd)}")
-        result = subprocess.run(outro_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"خطأ في معالجة الأوترو: {result.stderr}")
-            return False
-
-        # 3) إضافة العلامة المائية على الفيديو الأصلي
-        temp_watermarked = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-        temp_watermarked_path = temp_watermarked.name
-        temp_watermarked.close()
-
-        watermark_cmd = [
-            'ffmpeg', '-y', '-i', video_path, '-i', temp_watermark_path,
-            '-filter_complex', f'[0:v][1:v]overlay=0:0:format=auto,format=yuv420p',
-            '-c:v', encoder
-        ]
-        watermark_cmd.extend(get_ultra_fast_settings())
-        if video_has_audio:
-            watermark_cmd.extend(['-c:a', 'copy'])
-        else:
-            watermark_cmd.extend(['-an'])
-        watermark_cmd.append(temp_watermarked_path)
-
-        print("دمج الفيديو مع العلامة المائية...")
-        print(f"أمر العلامة المائية: {' '.join(watermark_cmd)}")
-        result = subprocess.run(watermark_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"خطأ في دمج العلامة المائية: {result.stderr}")
-            return False
-
-        # 4) دمج الفيديو المعلّم + الأوترو (مع مراعاة الصوت)
-        if video_has_audio and outro_has_audio:
-            filter_complex = '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]'
-            map_args = ['-map', '[outv]', '-map', '[outa]']
-            audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-        elif video_has_audio and not outro_has_audio:
-            filter_complex = '[0:v][0:a][1:v]concat=n=2:v=1:a=1[outv][outa]'
-            map_args = ['-map', '[outv]', '-map', '[outa]']
-            audio_codec = ['-c:a', 'copy']
-        elif not video_has_audio and outro_has_audio:
-            # توليد مسار صوتي صامت للفيديو الأول ليتوافق الدمج
-            filter_complex = ('anullsrc=channel_layout=stereo:sample_rate=48000[a0];'
-                              '[0:v][a0][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]')
-            map_args = ['-map', '[outv]', '-map', '[outa]']
-            audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-        else:
-            filter_complex = '[0:v][1:v]concat=n=2:v=1[outv]'
-            map_args = ['-map', '[outv]']
-            audio_codec = ['-an']
-
-        final_cmd = [
-            'ffmpeg', '-y',
-            '-i', temp_watermarked_path,
-            '-i', temp_outro_path,
-            '-filter_complex', filter_complex
-        ]
-        final_cmd.extend(map_args)
-        final_cmd.extend(['-c:v', encoder])
-        final_cmd.extend(get_ultra_fast_settings())
-        final_cmd.extend(audio_codec)
-        final_cmd.extend(['-movflags', '+faststart'])
-        final_cmd.append(output_path)
-
-        print("دمج الفيديو النهائي...")
-        print(f"أمر الدمج النهائي: {' '.join(final_cmd)}")
-        result = subprocess.run(final_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"خطأ في الدمج النهائي: {result.stderr}")
-            return False
-
-        # تنظيف الملفات المؤقتة
-        for p in [temp_watermark_path, temp_outro_path, temp_watermarked_path]:
-            try:
-                if p and os.path.exists(p):
-                    os.unlink(p)
-            except Exception:
-                pass
-
-        print("✅ تمت المعالجة بنجاح باستخدام GPU!")
-        return True
-
-    except Exception as e:
-        print(f"خطأ في معالجة الفيديو باستخدام FFmpeg GPU: {str(e)}")
-        for temp_file in [temp_watermark_path, temp_outro_path, temp_watermarked_path]:
-            try:
-                if temp_file and os.path.exists(temp_file):
-                    os.unlink(temp_file)
-            except Exception:
-                pass
-        return False
 
 def process_video_fallback(video_path, output_path):
     """معالجة بديلة باستخدام MoviePy (CPU)"""
@@ -459,9 +393,9 @@ def merge_videos(video1_path, video2_path):
         merged_path = merged_file.name
         merged_file.close()
 
-        # أمر FFmpeg لدمج الفيديوهات بسرعة فائقة
+        # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
         encoder = get_nvenc_encoder()
-        if encoder:
+        if encoder and 'h264_nvenc' in encoder:
             # استخدام GPU للدمج
             merge_cmd = [
                 'ffmpeg', '-y',
@@ -470,12 +404,11 @@ def merge_videos(video1_path, video2_path):
                 '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
                 '-map', '[outv]',
                 '-map', '[outa]',
-                '-c:v', encoder,
+                '-c:v', 'h264_nvenc',
                 '-c:a', 'aac',
-                '-preset', 'p1',          # أسرع preset
-                '-tune', 'll',            # Low latency
-                '-rc', 'cbr',
-                '-b:v', '4M',
+                '-preset', 'p1',
+                '-cq', '23',
+                '-b:v', '6M',
                 merged_path
             ]
         else:
@@ -489,8 +422,8 @@ def merge_videos(video1_path, video2_path):
                 '-map', '[outa]',
                 '-c:v', 'libx264',
                 '-c:a', 'aac',
-                '-preset', 'ultrafast',   # أسرع preset للـ CPU
-                '-crf', '28',             # جودة أقل للسرعة
+                '-preset', 'ultrafast',
+                '-crf', '26',             # جودة محسنة (26 بدل 28)
                 merged_path
             ]
 
@@ -825,14 +758,43 @@ def task_status(task_id):
 
 @app.route('/download/<filename>')
 def download_file(filename):
+    """تحميل آمن للملفات"""
     try:
+        # تأمين اسم الملف
+        safe_filename = secure_filename(filename)
+        
+        # التأكد من أن الملف داخل OUTPUT_FOLDER فقط
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], safe_filename)
+        
+        # التحقق من وجود الملف وأنه داخل المجلد المسموح
+        if not os.path.exists(file_path):
+            logger.warning(f"⚠️ محاولة تحميل ملف غير موجود: {safe_filename}")
+            return jsonify({'error': 'ملف غير موجود'}), 404
+            
+        # التحقق من Path Traversal
+        real_path = os.path.realpath(file_path)
+        real_output_folder = os.path.realpath(app.config['OUTPUT_FOLDER'])
+        
+        if not real_path.startswith(real_output_folder):
+            logger.error(f"🚨 محاولة Path Traversal: {filename} → {real_path}")
+            return jsonify({'error': 'وصول غير مسموح'}), 403
+        
+        logger.info(f"✅ تحميل ملف: {safe_filename}")
+        
         return send_file(
-            os.path.join(app.config['OUTPUT_FOLDER'], filename),
+            file_path,
             as_attachment=True,
-            download_name=filename
+            download_name=safe_filename
         )
-    except Exception:
-        return jsonify({'error': 'ملف غير موجود'}), 404
+        
+    except Exception as e:
+        error_id, _ = log_detailed_error(e, "download_file", {
+            'requested_filename': filename,
+            'safe_filename': safe_filename if 'safe_filename' in locals() else 'N/A',
+            'output_folder': app.config['OUTPUT_FOLDER']
+        })
+        logger.error(f"❌ خطأ في التحميل [ID: {error_id}]: {str(e)}")
+        return jsonify({'error': f'خطأ في التحميل [ID: {error_id}]'}), 500
 
 @app.route('/api/test')
 def api_test():
