@@ -234,16 +234,17 @@ def test_gpu_support():
         print(f"❌ خطأ في اختبار GPU [ID: {error_id}]: {e}")
         return False
 
-def get_final_nvenc_settings():
-    """إعدادات NVENC نهائية محسنة للسرعة والجودة المتوازنة"""
+def get_optimized_nvenc_settings():
+    """إعدادات NVENC محسنة للسرعة والجودة المتوازنة"""
     return [
         '-preset', 'p1',           # أسرع preset
-        '-cq', '23',               # جودة متوازنة
-        '-maxrate', '12M',         # معدل بت أعلى للجودة
-        '-bufsize', '24M',         # بفر أكبر
+        '-cq', '23',               # جودة متوازنة (23 بدل 25)
+        '-b:v', '6M',              # معدل بت متوسط
+        '-maxrate', '8M',          # أقصى معدل بت
+        '-bufsize', '12M',         # بفر متوسط
+        '-gpu', '0',               # استخدام أول GPU
         '-spatial-aq', '1',        # تحسين جودة المناطق
         '-temporal-aq', '1',       # تحسين جودة الحركة
-        '-rc-lookahead', '20',     # تحسين التنبؤ
     ]
 
 def process_video_ffmpeg_gpu(video_path, output_path):
@@ -348,93 +349,46 @@ def process_video_ffmpeg_gpu(video_path, output_path):
             return False
 
 def process_video_fallback(video_path, output_path):
-    """معالجة بديلة باستخدام FFmpeg CPU (أسرع من MoviePy)"""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            # معلومات الفيديوهات
-            video_info = get_video_info(video_path)
-            outro_info = get_video_info(OUTRO_PATH)
-            if not video_info or not outro_info:
-                return False
+    """معالجة بديلة باستخدام MoviePy (CPU)"""
+    try:
+        # تحميل المقاطع
+        video = VideoFileClip(video_path)
+        watermark = ImageClip(WATERMARK_PATH).resize((video.w, video.h)).set_opacity(0.3)
+        outro = VideoFileClip(OUTRO_PATH).resize((video.w, video.h))
 
-            video_stream = next((s for s in video_info['streams'] if s['codec_type'] == 'video'), None)
-            if not video_stream:
-                return False
+        # وضع العلامة المائية طوال مدة الفيديو
+        wm_layer = watermark.set_position('center').set_duration(video.duration)
+        video_with_watermark = CompositeVideoClip([video, wm_layer])
 
-            width = int(video_stream['width'])
-            height = int(video_stream['height'])
-            video_has_audio = any(s['codec_type'] == 'audio' for s in video_info['streams'])
-            outro_has_audio = any(s['codec_type'] == 'audio' for s in outro_info['streams'])
+        # دمج الأوترو بعد نهاية الفيديو
+        final_timeline = CompositeVideoClip([
+            video_with_watermark.set_duration(video.duration),
+            outro.set_position('center').set_start(video.duration)
+        ])
 
-            print(f"🖥️ معالجة CPU في تمرير واحد: {width}x{height}")
+        # حفظ الناتج بإعدادات فائقة السرعة
+        final_timeline.write_videofile(
+            output_path,
+            codec='libx264',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True,
+            threads=16,                    # زيادة عدد threads
+            preset='ultrafast',            # أسرع preset
+            ffmpeg_params=['-crf', '28'],  # جودة أقل للسرعة
+            verbose=False,
+            logger=None
+        )
 
-            # نفس filter_complex لكن مع libx264
-            if video_has_audio and outro_has_audio:
-                filter_complex = (
-                    f'[1:v]scale={width}:{height}[outro_scaled];'
-                    f'[0:v][outro_scaled]concat=n=2:v=1:a=0[concat_v];'
-                    f'movie={WATERMARK_PATH}[wm];'
-                    f'[wm]scale={width}:{height},format=rgba,colorchannelmixer=aa=0.3[wm_scaled];'
-                    f'[concat_v][wm_scaled]overlay=0:0[outv];'
-                    f'[0:a][1:a]concat=n=2:v=0:a=1[outa]'
-                )
-                map_args = ['-map', '[outv]', '-map', '[outa]']
-                audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-            elif video_has_audio and not outro_has_audio:
-                filter_complex = (
-                    f'[1:v]scale={width}:{height}[outro_scaled];'
-                    f'anullsrc=channel_layout=stereo:sample_rate=48000[silence];'
-                    f'[0:v][outro_scaled]concat=n=2:v=1:a=0[concat_v];'
-                    f'movie={WATERMARK_PATH}[wm];'
-                    f'[wm]scale={width}:{height},format=rgba,colorchannelmixer=aa=0.3[wm_scaled];'
-                    f'[concat_v][wm_scaled]overlay=0:0[outv];'
-                    f'[0:a][silence]concat=n=2:v=0:a=1[outa]'
-                )
-                map_args = ['-map', '[outv]', '-map', '[outa]']
-                audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-            else:
-                filter_complex = (
-                    f'[1:v]scale={width}:{height}[outro_scaled];'
-                    f'[0:v][outro_scaled]concat=n=2:v=1:a=0[concat_v];'
-                    f'movie={WATERMARK_PATH}[wm];'
-                    f'[wm]scale={width}:{height},format=rgba,colorchannelmixer=aa=0.3[wm_scaled];'
-                    f'[concat_v][wm_scaled]overlay=0:0[outv]'
-                )
-                map_args = ['-map', '[outv]']
-                audio_codec = ['-an']
+        # تنظيف الذاكرة
+        video.close()
+        outro.close()
+        final_timeline.close()
+        return True
 
-            # أمر FFmpeg CPU للمعالجة الكاملة
-            cmd = [
-                'ffmpeg', '-y',
-                '-i', video_path,
-                '-i', OUTRO_PATH,
-                '-filter_complex', filter_complex
-            ]
-            cmd.extend(map_args)
-            cmd.extend(['-c:v', 'libx264'])
-            cmd.extend(['-preset', 'ultrafast', '-crf', '26', '-threads', '0'])
-            cmd.extend(audio_codec)
-            cmd.extend(['-movflags', '+faststart'])
-            cmd.append(output_path)
-
-            print("🖥️ معالجة CPU في تمرير واحد...")
-            print(f"أمر FFmpeg CPU: {' '.join(cmd)}")
-            
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                print("✅ تمت المعالجة بنجاح باستخدام CPU!")
-                return True
-            else:
-                print(f"❌ خطأ في معالجة CPU: {result.stderr}")
-                return False
-
-        except Exception as e:
-            error_id, _ = log_detailed_error(e, "process_video_fallback", {
-                'video_path': video_path,
-                'output_path': output_path
-            })
-            print(f"❌ خطأ في معالجة CPU [ID: {error_id}]: {str(e)}")
-            return False
+    except Exception as e:
+        print(f"خطأ في معالجة الفيديو باستخدام MoviePy: {str(e)}")
+        return False
 
 def merge_videos(video1_path, video2_path):
     """دمج فيديوهين معاً باستخدام FFmpeg"""
@@ -874,39 +828,17 @@ def health_check():
         error_id, _ = log_detailed_error(e, "redis_health_check", {"redis_url": redis_url})
         redis_status = f"disconnected [ID: {error_id}]: {str(e)}"
     
-    # فحص Celery workers (إذا كان Redis متصل)
-    celery_status = 'not_configured'
-    if 'connected' in redis_status:
-        try:
-            # فحص بسيط للـ Celery
-            inspect = celery.control.inspect()
-            active_workers = inspect.active()
-            if active_workers:
-                celery_status = f'active_workers: {len(active_workers)}'
-            else:
-                celery_status = 'no_active_workers'
-        except Exception as e:
-            celery_status = f'check_failed: {str(e)[:50]}'
-    
     return jsonify({
         'status': 'healthy',
         'redis': redis_status,
-        'celery': celery_status,
+        'celery': 'configured',
         'upload_folder': app.config['UPLOAD_FOLDER'],
-        'output_folder': app.config['OUTPUT_FOLDER'],
-        'assets': {
-            'watermark': os.path.exists(WATERMARK_PATH),
-            'outro': os.path.exists(OUTRO_PATH)
-        }
+        'output_folder': app.config['OUTPUT_FOLDER']
     })
 
 @app.route('/debug/errors')
 def get_recent_errors():
     """عرض آخر الأخطاء المسجلة (للمطورين فقط)"""
-    # حماية endpoint في الإنتاج
-    if app.config.get('FLASK_ENV') == 'production':
-        return jsonify({'error': 'غير متاح في الإنتاج'}), 403
-        
     try:
         log_file = os.path.join('logs', 'errors.log')
         if os.path.exists(log_file):
@@ -930,10 +862,7 @@ def get_recent_errors():
 
 @app.route('/debug/system')
 def system_info():
-    """معلومات النظام التفصيلية (للمطورين فقط)"""
-    # حماية endpoint في الإنتاج
-    if app.config.get('FLASK_ENV') == 'production':
-        return jsonify({'error': 'غير متاح في الإنتاج'}), 403
+    """معلومات النظام التفصيلية"""
     # معلومات النظام الأساسية بدون psutil
     system_data = {
         'disk_usage': get_disk_usage(),

@@ -874,39 +874,17 @@ def health_check():
         error_id, _ = log_detailed_error(e, "redis_health_check", {"redis_url": redis_url})
         redis_status = f"disconnected [ID: {error_id}]: {str(e)}"
     
-    # فحص Celery workers (إذا كان Redis متصل)
-    celery_status = 'not_configured'
-    if 'connected' in redis_status:
-        try:
-            # فحص بسيط للـ Celery
-            inspect = celery.control.inspect()
-            active_workers = inspect.active()
-            if active_workers:
-                celery_status = f'active_workers: {len(active_workers)}'
-            else:
-                celery_status = 'no_active_workers'
-        except Exception as e:
-            celery_status = f'check_failed: {str(e)[:50]}'
-    
     return jsonify({
         'status': 'healthy',
         'redis': redis_status,
-        'celery': celery_status,
+        'celery': 'configured',
         'upload_folder': app.config['UPLOAD_FOLDER'],
-        'output_folder': app.config['OUTPUT_FOLDER'],
-        'assets': {
-            'watermark': os.path.exists(WATERMARK_PATH),
-            'outro': os.path.exists(OUTRO_PATH)
-        }
+        'output_folder': app.config['OUTPUT_FOLDER']
     })
 
 @app.route('/debug/errors')
 def get_recent_errors():
     """عرض آخر الأخطاء المسجلة (للمطورين فقط)"""
-    # حماية endpoint في الإنتاج
-    if app.config.get('FLASK_ENV') == 'production':
-        return jsonify({'error': 'غير متاح في الإنتاج'}), 403
-        
     try:
         log_file = os.path.join('logs', 'errors.log')
         if os.path.exists(log_file):
@@ -930,10 +908,7 @@ def get_recent_errors():
 
 @app.route('/debug/system')
 def system_info():
-    """معلومات النظام التفصيلية (للمطورين فقط)"""
-    # حماية endpoint في الإنتاج
-    if app.config.get('FLASK_ENV') == 'production':
-        return jsonify({'error': 'غير متاح في الإنتاج'}), 403
+    """معلومات النظام التفصيلية"""
     # معلومات النظام الأساسية بدون psutil
     system_data = {
         'disk_usage': get_disk_usage(),
