@@ -30,6 +30,9 @@ RUN chmod -R 755 assets/
 RUN mkdir -p uploads outputs \
     && chmod 755 uploads outputs
 
+# تأكد أن مجلد /data مملوك للمستخدم الصحيح
+RUN mkdir -p /data/uploads /data/outputs && chmod -R 777 /data
+
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser \
     && chown -R appuser:appuser /app
