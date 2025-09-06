@@ -249,7 +249,6 @@ function showResult(result) {
   // Reset form
   uploadForm.reset();
   videoInfo.innerHTML = "";
-  video2Info.innerHTML = "";
 
   // Reset button
   submitBtn.disabled = false;

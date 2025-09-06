@@ -368,13 +368,6 @@ def process_video(video_path, output_path, video2_path=None):
         if gpu_supported:
             print("🚀 استخدام GPU (NVENC)...")
             if process_video_ffmpeg_gpu(final_video_path, output_path):
-                # تنظيف الملف المدموج المؤقت إذا كان موجوداً
-                if video2_path and final_video_path != video_path:
-                    try:
-                        os.unlink(final_video_path)
-                        print("🧹 تم تنظيف الملف المدموج المؤقت")
-                    except:
-                        pass
                 return True
             else:
                 print("⚠️ فشل GPU، الانتقال إلى CPU...")

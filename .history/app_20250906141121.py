@@ -308,47 +308,6 @@ def process_video_fallback(video_path, output_path):
         print(f"خطأ في معالجة الفيديو باستخدام MoviePy: {str(e)}")
         return False
 
-def merge_videos(video1_path, video2_path):
-    """دمج فيديوهين معاً باستخدام FFmpeg"""
-    try:
-        # إنشاء ملف مؤقت للفيديو المدموج
-        merged_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-        merged_path = merged_file.name
-        merged_file.close()
-
-        # أمر FFmpeg لدمج الفيديوهات
-        merge_cmd = [
-            'ffmpeg', '-y',
-            '-i', video1_path,
-            '-i', video2_path,
-            '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-            '-map', '[outv]',
-            '-map', '[outa]',
-            '-c:v', 'libx264',
-            '-c:a', 'aac',
-            '-preset', 'medium',
-            merged_path
-        ]
-
-        print(f"أمر دمج الفيديوهات: {' '.join(merge_cmd)}")
-        result = subprocess.run(merge_cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("✅ تم دمج الفيديوهات بنجاح")
-            return merged_path
-        else:
-            print(f"❌ خطأ في دمج الفيديوهات: {result.stderr}")
-            # حذف الملف المؤقت في حالة الفشل
-            try:
-                os.unlink(merged_path)
-            except:
-                pass
-            return None
-
-    except Exception as e:
-        print(f"❌ خطأ في دالة دمج الفيديوهات: {str(e)}")
-        return None
-
 def process_video(video_path, output_path, video2_path=None):
     """المعالجة الكاملة: تفضيل GPU ثم السقوط إلى CPU"""
     try:
@@ -368,29 +327,15 @@ def process_video(video_path, output_path, video2_path=None):
         if gpu_supported:
             print("🚀 استخدام GPU (NVENC)...")
             if process_video_ffmpeg_gpu(final_video_path, output_path):
-                # تنظيف الملف المدموج المؤقت إذا كان موجوداً
-                if video2_path and final_video_path != video_path:
-                    try:
-                        os.unlink(final_video_path)
-                        print("🧹 تم تنظيف الملف المدموج المؤقت")
-                    except:
-                        pass
                 return True
             else:
                 print("⚠️ فشل GPU، الانتقال إلى CPU...")
 
         print("🖥️ استخدام MoviePy (CPU) كبديل...")
-        result = process_video_fallback(final_video_path, output_path)
-        
-        # تنظيف الملف المدموج المؤقت إذا كان موجوداً
-        if video2_path and final_video_path != video_path:
-            try:
-                os.unlink(final_video_path)
-                print("🧹 تم تنظيف الملف المدموج المؤقت")
-            except:
-                pass
-        
-        return result
+        if process_video_fallback(final_video_path, output_path):
+            return True
+
+        return False
 
     except Exception as e:
         print(f"❌ خطأ عام في المعالجة: {str(e)}")

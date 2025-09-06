@@ -29,10 +29,6 @@ function initializeFileInputs() {
   videoInput.addEventListener("change", function (e) {
     handleFileSelect(e.target, videoInfo, "video");
   });
-  
-  video2Input.addEventListener("change", function (e) {
-    handleFileSelect(e.target, video2Info, "video");
-  });
 }
 
 // Handle file selection
@@ -249,7 +245,6 @@ function showResult(result) {
   // Reset form
   uploadForm.reset();
   videoInfo.innerHTML = "";
-  video2Info.innerHTML = "";
 
   // Reset button
   submitBtn.disabled = false;
