@@ -68,6 +68,9 @@ services:
       - CELERY_CONCURRENCY=3
       - CELERY_PREFETCH_MULTIPLIER=1
       - REDIS_URL=redis://redis:6379/0
+      # GPU support (ignored if no GPU available)
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     restart: unless-stopped
     depends_on:
       redis:
@@ -75,6 +78,8 @@ services:
     stop_grace_period: 120s
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
+    # GPU device request - requires nvidia-container-toolkit on host
+    runtime: nvidia
 
 volumes:
   redis_data:

@@ -27,7 +27,7 @@ services:
   video-processor-api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.nvidia
     ports:
       - "5000:5000"
     networks: [video_network]
@@ -49,6 +49,22 @@ services:
       - GUNICORN_MAX_REQUESTS_JITTER=50
       - REDIS_URL=redis://redis:6379/0
       - FLASK_CORS_ORIGINS=https://ooc4wcggkoowkws8kkks0cgo.coolify.khaledalnassan.com
+      # NVENC Settings
+      - NVENC_CQ=19
+      - NVENC_MAXRATE=16M
+      - NVENC_BUFSIZE=32M
+      - NVENC_BV=8M
+      - NVENC_PRESET=p1
+      # CPU Fallback Settings
+      - X264_PRESET=veryfast
+      - X264_CRF=20
+      - FFMPEG_THREADS=8
+      # Celery Settings
+      - CELERY_CONCURRENCY=3
+      - CELERY_PREFETCH_MULTIPLIER=1
+      - CELERY_VISIBILITY_TIMEOUT=21600
+      - TASK_SOFT_TIME_LIMIT=18000
+      - TASK_TIME_LIMIT=21600
     restart: unless-stopped
     depends_on:
       redis:
