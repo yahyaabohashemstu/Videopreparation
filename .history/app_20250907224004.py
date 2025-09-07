@@ -433,7 +433,7 @@ def process_video_fallback(video_path, output_path):
             ]
             cmd.extend(map_args)
             cmd.extend(['-c:v', 'libx264'])
-            cmd.extend(['-preset', 'veryfast', '-crf', '20', '-threads', '0'])
+            cmd.extend(['-preset', 'ultrafast', '-crf', '26', '-threads', '0'])
             cmd.extend(audio_codec)
             cmd.extend(['-movflags', '+faststart'])
             cmd.append(output_path)
@@ -477,12 +477,8 @@ def merge_videos(video1_path, video2_path):
                     '-c:v', 'h264_nvenc',
                     '-c:a', 'aac',
                     '-preset', 'p1',
-                    '-rc', 'vbr',
-                    '-cq', '19',
+                    '-cq', '23',
                     '-b:v', '8M',
-                    '-maxrate', '16M',
-                    '-bufsize', '32M',
-                    '-pix_fmt', 'yuv420p',
                     merged_path
                 ]
             else:
@@ -496,10 +492,9 @@ def merge_videos(video1_path, video2_path):
                     '-map', '[outa]',
                     '-c:v', 'libx264',
                     '-c:a', 'aac',
-                    '-preset', 'veryfast',
-                    '-crf', '20',
+                    '-preset', 'ultrafast',
+                    '-crf', '26',
                     '-threads', '0',
-                    '-pix_fmt', 'yuv420p',
                     merged_path
                 ]
 

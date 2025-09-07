@@ -496,10 +496,9 @@ def merge_videos(video1_path, video2_path):
                     '-map', '[outa]',
                     '-c:v', 'libx264',
                     '-c:a', 'aac',
-                    '-preset', 'veryfast',
-                    '-crf', '20',
+                    '-preset', 'ultrafast',
+                    '-crf', '26',
                     '-threads', '0',
-                    '-pix_fmt', 'yuv420p',
                     merged_path
                 ]
 

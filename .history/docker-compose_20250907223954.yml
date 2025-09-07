@@ -78,8 +78,11 @@ services:
     stop_grace_period: 120s
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
-    # GPU device request - requires nvidia-container-toolkit on host
-    runtime: nvidia
+    # GPU device request (Compose v2) - works with regular Docker Compose
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]
 
 volumes:
   redis_data:
