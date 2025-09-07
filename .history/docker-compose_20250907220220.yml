@@ -60,29 +60,20 @@ services:
       - uploads_data:/data/uploads
       - outputs_data:/data/outputs
     environment:
-      - PYTHONUNBUFFERED=1
       - FLASK_ENV=production
-      - WORKER_MODE=celery
+      - SECRET_KEY=${SECRET_KEY:-fallback-secret-key}
       - UPLOAD_FOLDER=/data/uploads
       - OUTPUT_FOLDER=/data/outputs
+      - WORKER_MODE=celery
       - CELERY_CONCURRENCY=3
       - CELERY_PREFETCH_MULTIPLIER=1
+      - GPU_ACCELERATION=true
+      # For Coolify: REDIS_URL=redis://default:YOUR_PASSWORD@redis-database-xxx:6379/0
       - REDIS_URL=redis://redis:6379/0
-      # GPU support (ignored if no GPU available)
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     restart: unless-stopped
     depends_on:
       redis:
         condition: service_healthy
-    stop_grace_period: 120s
-    healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
-    # GPU device request (Compose v2)
-    device_requests:
-      - driver: nvidia
-        count: all
-        capabilities: [gpu]
 
 volumes:
   redis_data:

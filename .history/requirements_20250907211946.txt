@@ -1,0 +1,11 @@
+flask
+flask-cors
+gunicorn
+opencv-python-headless
+Pillow
+numpy
+celery
+redis
+werkzeug
+python-dotenv
+psutil

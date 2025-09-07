@@ -517,7 +517,7 @@ def cleanup_temp_files(video2_path, final_video_path, original_video_path):
     except Exception as e:
         logger.warning(f"⚠️ فشل في تنظيف الملف المؤقت: {str(e)}")
 
-@celery.task(bind=True, acks_late=True, reject_on_worker_lost=True)
+@celery.task(bind=True)
 def process_video_task(self, video_path, output_path, video2_path=None):
     """مهمة Celery لمعالجة الفيديو"""
     try:

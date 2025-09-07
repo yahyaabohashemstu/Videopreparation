@@ -47,17 +47,13 @@ ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
-# Health check removed from Dockerfile - will be set in docker-compose for API only
+# Health check (only works in API mode)
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
 
 # 👇 Run API or Celery Worker depending on WORKER_MODE
 CMD sh -c 'if [ "$WORKER_MODE" = "celery" ]; then \
-              celery -A app.celery worker --loglevel=info \
-                --concurrency=${CELERY_CONCURRENCY:-2} \
-                --prefetch-multiplier=${CELERY_PREFETCH_MULTIPLIER:-1}; \
+              celery -A app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2} --prefetch-multiplier=1; \
            else \
-              gunicorn --bind 0.0.0.0:${PORT:-5000} \
-                --workers=${GUNICORN_WORKERS:-3} \
-                --worker-class=gthread \
-                --threads=${GUNICORN_THREADS:-8} \
-                --timeout=${GUNICORN_TIMEOUT:-600} app:app; \
+              gunicorn --bind 0.0.0.0:5000 --workers=${GUNICORN_WORKERS:-3} --worker-class=gthread --threads=${GUNICORN_THREADS:-8} --timeout=${GUNICORN_TIMEOUT:-600} app:app; \
            fi'

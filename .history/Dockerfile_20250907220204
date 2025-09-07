@@ -51,13 +51,7 @@ ENV PYTHONUNBUFFERED=1
 
 # 👇 Run API or Celery Worker depending on WORKER_MODE
 CMD sh -c 'if [ "$WORKER_MODE" = "celery" ]; then \
-              celery -A app.celery worker --loglevel=info \
-                --concurrency=${CELERY_CONCURRENCY:-2} \
-                --prefetch-multiplier=${CELERY_PREFETCH_MULTIPLIER:-1}; \
+              celery -A app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2} --prefetch-multiplier=1; \
            else \
-              gunicorn --bind 0.0.0.0:${PORT:-5000} \
-                --workers=${GUNICORN_WORKERS:-3} \
-                --worker-class=gthread \
-                --threads=${GUNICORN_THREADS:-8} \
-                --timeout=${GUNICORN_TIMEOUT:-600} app:app; \
+              gunicorn --bind 0.0.0.0:5000 --workers=${GUNICORN_WORKERS:-3} --worker-class=gthread --threads=${GUNICORN_THREADS:-8} --timeout=${GUNICORN_TIMEOUT:-600} app:app; \
            fi'
