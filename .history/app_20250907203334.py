@@ -407,8 +407,8 @@ def process_video_fallback(video_path, output_path):
                 'ffmpeg', '-y',
                 '-i', video_path,
                 '-i', OUTRO_PATH,
-                '-filter_complex', filter_complex
-            ]
+            '-filter_complex', filter_complex
+        ]
             cmd.extend(map_args)
             cmd.extend(['-c:v', 'libx264'])
             cmd.extend(['-preset', 'ultrafast', '-crf', '26', '-threads', '0'])
@@ -440,7 +440,6 @@ def merge_videos(video1_path, video2_path):
     with tempfile.TemporaryDirectory() as temp_dir:
         merged_path = os.path.join(temp_dir, 'merged_video.mp4')
         
-        try:
             # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
             encoder = get_nvenc_encoder()
             if encoder == 'h264_nvenc':

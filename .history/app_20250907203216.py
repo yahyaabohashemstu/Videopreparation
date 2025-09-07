@@ -268,10 +268,10 @@ def process_video_ffmpeg_gpu(video_path, output_path):
             if not video_stream:
                 return False
 
-            width = int(video_stream['width'])
-            height = int(video_stream['height'])
-            video_has_audio = any(s['codec_type'] == 'audio' for s in video_info['streams'])
-            outro_has_audio = any(s['codec_type'] == 'audio' for s in outro_info['streams'])
+        width = int(video_stream['width'])
+        height = int(video_stream['height'])
+        video_has_audio = any(s['codec_type'] == 'audio' for s in video_info['streams'])
+        outro_has_audio = any(s['codec_type'] == 'audio' for s in outro_info['streams'])
 
             print(f"🚀 معالجة GPU في تمرير واحد: {width}x{height}")
 
@@ -333,7 +333,7 @@ def process_video_ffmpeg_gpu(video_path, output_path):
             if result.returncode == 0:
                 print("✅ تمت المعالجة بنجاح في تمرير واحد!")
                 return True
-            else:
+        else:
                 print(f"❌ خطأ في المعالجة: {result.stderr}")
                 return False
 
@@ -358,7 +358,7 @@ def process_video_fallback(video_path, output_path):
 
             video_stream = next((s for s in video_info['streams'] if s['codec_type'] == 'video'), None)
             if not video_stream:
-                return False
+            return False
 
             width = int(video_stream['width'])
             height = int(video_stream['height'])
@@ -368,7 +368,7 @@ def process_video_fallback(video_path, output_path):
             print(f"🖥️ معالجة CPU في تمرير واحد: {width}x{height}")
 
             # نفس filter_complex لكن مع libx264
-            if video_has_audio and outro_has_audio:
+        if video_has_audio and outro_has_audio:
                 filter_complex = (
                     f'[1:v]scale={width}:{height}[outro_scaled];'
                     f'[0:v][outro_scaled]concat=n=2:v=1:a=0[concat_v];'
@@ -377,9 +377,9 @@ def process_video_fallback(video_path, output_path):
                     f'[concat_v][wm_scaled]overlay=0:0[outv];'
                     f'[0:a][1:a]concat=n=2:v=0:a=1[outa]'
                 )
-                map_args = ['-map', '[outv]', '-map', '[outa]']
-                audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-            elif video_has_audio and not outro_has_audio:
+            map_args = ['-map', '[outv]', '-map', '[outa]']
+            audio_codec = ['-c:a', 'aac', '-b:a', '128k']
+        elif video_has_audio and not outro_has_audio:
                 filter_complex = (
                     f'[1:v]scale={width}:{height}[outro_scaled];'
                     f'anullsrc=channel_layout=stereo:sample_rate=48000[silence];'
@@ -389,9 +389,9 @@ def process_video_fallback(video_path, output_path):
                     f'[concat_v][wm_scaled]overlay=0:0[outv];'
                     f'[0:a][silence]concat=n=2:v=0:a=1[outa]'
                 )
-                map_args = ['-map', '[outv]', '-map', '[outa]']
-                audio_codec = ['-c:a', 'aac', '-b:a', '128k']
-            else:
+            map_args = ['-map', '[outv]', '-map', '[outa]']
+            audio_codec = ['-c:a', 'aac', '-b:a', '128k']
+        else:
                 filter_complex = (
                     f'[1:v]scale={width}:{height}[outro_scaled];'
                     f'[0:v][outro_scaled]concat=n=2:v=1:a=0[concat_v];'
@@ -399,16 +399,16 @@ def process_video_fallback(video_path, output_path):
                     f'[wm]scale={width}:{height},format=rgba,colorchannelmixer=aa=0.3[wm_scaled];'
                     f'[concat_v][wm_scaled]overlay=0:0[outv]'
                 )
-                map_args = ['-map', '[outv]']
-                audio_codec = ['-an']
+            map_args = ['-map', '[outv]']
+            audio_codec = ['-an']
 
             # أمر FFmpeg CPU للمعالجة الكاملة
             cmd = [
-                'ffmpeg', '-y',
+            'ffmpeg', '-y',
                 '-i', video_path,
                 '-i', OUTRO_PATH,
-                '-filter_complex', filter_complex
-            ]
+            '-filter_complex', filter_complex
+        ]
             cmd.extend(map_args)
             cmd.extend(['-c:v', 'libx264'])
             cmd.extend(['-preset', 'ultrafast', '-crf', '26', '-threads', '0'])
@@ -440,7 +440,6 @@ def merge_videos(video1_path, video2_path):
     with tempfile.TemporaryDirectory() as temp_dir:
         merged_path = os.path.join(temp_dir, 'merged_video.mp4')
         
-        try:
             # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
             encoder = get_nvenc_encoder()
             if encoder == 'h264_nvenc':

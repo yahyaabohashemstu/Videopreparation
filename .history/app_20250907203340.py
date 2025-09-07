@@ -440,7 +440,6 @@ def merge_videos(video1_path, video2_path):
     with tempfile.TemporaryDirectory() as temp_dir:
         merged_path = os.path.join(temp_dir, 'merged_video.mp4')
         
-        try:
             # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
             encoder = get_nvenc_encoder()
             if encoder == 'h264_nvenc':

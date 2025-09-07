@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import cv2  # اختياري (غير مستخدم مباشرةً، إبقاؤه لا يضر)
-# MoviePy removed - using FFmpeg only for better performance
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 from PIL import Image
 import tempfile
 import shutil
@@ -437,63 +437,76 @@ def process_video_fallback(video_path, output_path):
 
 def merge_videos(video1_path, video2_path):
     """دمج فيديوهين معاً باستخدام FFmpeg مع تنظيف مضمون"""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        merged_path = os.path.join(temp_dir, 'merged_video.mp4')
+    # إنشاء ملف مؤقت للفيديو المدموج
+    merged_file = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+    merged_path = merged_file.name
+    merged_file.close()
+
+    try:
+        # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
+        encoder = get_nvenc_encoder()
+        if encoder == 'h264_nvenc':
+            # استخدام GPU للدمج
+            merge_cmd = [
+                'ffmpeg', '-y',
+                '-i', video1_path,
+                '-i', video2_path,
+                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+                '-map', '[outv]',
+                '-map', '[outa]',
+                '-c:v', 'h264_nvenc',
+                '-c:a', 'aac',
+                '-preset', 'p1',
+                '-cq', '23',
+                '-b:v', '8M',
+                merged_path
+            ]
+        else:
+            # استخدام CPU مع أسرع إعدادات
+            merge_cmd = [
+                'ffmpeg', '-y',
+                '-i', video1_path,
+                '-i', video2_path,
+                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+                '-map', '[outv]',
+                '-map', '[outa]',
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-preset', 'ultrafast',
+                '-crf', '26',
+                '-threads', '0',
+                merged_path
+            ]
+
+        logger.info(f"🔗 دمج الفيديوهات: {' '.join(merge_cmd)}")
+        result = subprocess.run(merge_cmd, capture_output=True, text=True)
         
-        try:
-            # أمر FFmpeg لدمج الفيديوهات بإعدادات محسنة
-            encoder = get_nvenc_encoder()
-            if encoder == 'h264_nvenc':
-                # استخدام GPU للدمج
-                merge_cmd = [
-                    'ffmpeg', '-y',
-                    '-i', video1_path,
-                    '-i', video2_path,
-                    '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                    '-map', '[outv]',
-                    '-map', '[outa]',
-                    '-c:v', 'h264_nvenc',
-                    '-c:a', 'aac',
-                    '-preset', 'p1',
-                    '-cq', '23',
-                    '-b:v', '8M',
-                    merged_path
-                ]
-            else:
-                # استخدام CPU مع أسرع إعدادات
-                merge_cmd = [
-                    'ffmpeg', '-y',
-                    '-i', video1_path,
-                    '-i', video2_path,
-                    '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                    '-map', '[outv]',
-                    '-map', '[outa]',
-                    '-c:v', 'libx264',
-                    '-c:a', 'aac',
-                    '-preset', 'ultrafast',
-                    '-crf', '26',
-                    '-threads', '0',
-                    merged_path
-                ]
-
-            logger.info(f"🔗 دمج الفيديوهات: {' '.join(merge_cmd)}")
-            result = subprocess.run(merge_cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                logger.info("✅ تم دمج الفيديوهات بنجاح")
-                return merged_path
-            else:
-                logger.error(f"❌ خطأ في دمج الفيديوهات: {result.stderr}")
-                return None
-
-        except Exception as e:
-            error_id, _ = log_detailed_error(e, "merge_videos", {
-                'video1_path': video1_path,
-                'video2_path': video2_path,
-                'merged_path': merged_path
-            })
-            logger.error(f"❌ خطأ في دالة دمج الفيديوهات [ID: {error_id}]: {str(e)}")
+        if result.returncode == 0:
+            logger.info("✅ تم دمج الفيديوهات بنجاح")
+            return merged_path
+        else:
+            logger.error(f"❌ خطأ في دمج الفيديوهات: {result.stderr}")
             return None
+
+    except Exception as e:
+        error_id, _ = log_detailed_error(e, "merge_videos", {
+            'video1_path': video1_path,
+            'video2_path': video2_path,
+            'merged_path': merged_path
+        })
+        logger.error(f"❌ خطأ في دالة دمج الفيديوهات [ID: {error_id}]: {str(e)}")
+        return None
+    
+    finally:
+        # تنظيف مضمون في حالة الفشل
+        if os.path.exists(merged_path):
+            try:
+                # التحقق من نجاح العملية قبل الإرجاع
+                if result.returncode != 0:
+                    os.unlink(merged_path)
+                    logger.info("🧹 تم حذف الملف المدموج الفاشل")
+            except:
+                pass
 
 def cleanup_temp_files(video2_path, final_video_path, original_video_path):
     """تنظيف مركزي مضمون للملفات المؤقتة"""
@@ -659,30 +672,12 @@ def upload_video():
         # تحقق من امتداد الفيديو الأول
         if not allowed_file(video_file.filename, ALLOWED_EXTENSIONS):
             return jsonify({'error': 'صيغة الفيديو الأول غير مدعومة'}), 400
-        
-        # حماية من الملفات الضخمة - تحقق من الحجم الفعلي
-        video_file.seek(0, 2)  # الانتقال لنهاية الملف
-        video_size = video_file.tell()
-        video_file.seek(0)  # العودة للبداية
-        
-        # حد أقصى 500MB لكل فيديو
-        max_size = 500 * 1024 * 1024
-        if video_size > max_size:
-            return jsonify({'error': f'حجم الفيديو الأول كبير جداً ({video_size // (1024*1024)}MB). الحد الأقصى 500MB'}), 400
             
         # تحقق من الفيديو الثاني إذا كان موجوداً
         has_second_video = video2_file and video2_file.filename != ''
         if has_second_video:
             if not allowed_file(video2_file.filename, ALLOWED_EXTENSIONS):
                 return jsonify({'error': 'صيغة الفيديو الثاني غير مدعومة'}), 400
-            
-            # حماية من الملفات الضخمة - تحقق من الحجم الفعلي للفيديو الثاني
-            video2_file.seek(0, 2)  # الانتقال لنهاية الملف
-            video2_size = video2_file.tell()
-            video2_file.seek(0)  # العودة للبداية
-            
-            if video2_size > max_size:
-                return jsonify({'error': f'حجم الفيديو الثاني كبير جداً ({video2_size // (1024*1024)}MB). الحد الأقصى 500MB'}), 400
             
         # تحقق من وجود الملفات الثابتة
         if not os.path.exists(WATERMARK_PATH):
