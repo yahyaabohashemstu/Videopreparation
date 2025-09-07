@@ -247,16 +247,11 @@ def test_gpu_support():
 
 def get_final_nvenc_settings():
     """إعدادات NVENC نهائية محسنة للسرعة والجودة المتوازنة"""
-    # استخدام متغيرات البيئة إذا كانت متوفرة
-    cq = os.getenv('NVENC_CQ', '23')
-    maxrate = os.getenv('NVENC_MAXRATE', '12M')
-    bufsize = os.getenv('NVENC_BUFSIZE', '24M')
-    
     return [
         '-preset', 'p1',           # أسرع preset
-        '-cq', cq,                 # جودة متوازنة (قابلة للتخصيص)
-        '-maxrate', maxrate,       # معدل بت أعلى للجودة
-        '-bufsize', bufsize,       # بفر أكبر
+        '-cq', '23',               # جودة متوازنة
+        '-maxrate', '12M',         # معدل بت أعلى للجودة
+        '-bufsize', '24M',         # بفر أكبر
         '-spatial-aq', '1',        # تحسين جودة المناطق
         '-temporal-aq', '1',       # تحسين جودة الحركة
         '-rc-lookahead', '20',     # تحسين التنبؤ

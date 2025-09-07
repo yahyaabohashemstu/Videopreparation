@@ -38,8 +38,6 @@ services:
       - GUNICORN_WORKERS=3
       - GUNICORN_THREADS=8
       - GUNICORN_TIMEOUT=600
-      - GUNICORN_MAX_REQUESTS=500
-      - GUNICORN_MAX_REQUESTS_JITTER=50
       - FLASK_CORS_ORIGINS=https://ooc4wcggkoowkws8kkks0cgo.coolify.khaledalnassan.com
       # For Coolify: REDIS_URL=redis://default:YOUR_PASSWORD@redis-database-xxx:6379/0
       - REDIS_URL=redis://redis:6379/0

@@ -59,8 +59,5 @@ CMD sh -c 'if [ "$WORKER_MODE" = "celery" ]; then \
                 --workers=${GUNICORN_WORKERS:-3} \
                 --worker-class=gthread \
                 --threads=${GUNICORN_THREADS:-8} \
-                --timeout=${GUNICORN_TIMEOUT:-600} \
-                --max-requests=${GUNICORN_MAX_REQUESTS:-500} \
-                --max-requests-jitter=${GUNICORN_MAX_REQUESTS_JITTER:-50} \
-                app:app; \
+                --timeout=${GUNICORN_TIMEOUT:-600} app:app; \
            fi'
