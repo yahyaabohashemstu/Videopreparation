@@ -513,11 +513,6 @@ def merge_videos(video1_path, video2_path):
                 merge_cmd.append(merged_path)
             else:
                 # استخدام CPU مع أسرع إعدادات
-                # قراءة إعدادات CPU من متغيرات البيئة
-                cpu_preset = os.getenv('X264_PRESET', 'veryfast')
-                cpu_crf = os.getenv('X264_CRF', '20')
-                cpu_threads = os.getenv('FFMPEG_THREADS', '0')
-                
                 merge_cmd = [
                     'ffmpeg', '-y',
                     '-i', video1_path,
@@ -527,9 +522,9 @@ def merge_videos(video1_path, video2_path):
                     '-map', '[outa]',
                     '-c:v', 'libx264',
                     '-c:a', 'aac',
-                    '-preset', cpu_preset,
-                    '-crf', cpu_crf,
-                    '-threads', cpu_threads,
+                    '-preset', 'veryfast',
+                    '-crf', '20',
+                    '-threads', '0',
                     '-pix_fmt', 'yuv420p',
                     merged_path
                 ]

@@ -272,13 +272,10 @@ def get_final_nvenc_settings():
     maxrate = os.getenv('NVENC_MAXRATE', '16M')
     bufsize = os.getenv('NVENC_BUFSIZE', '32M')
     bv = os.getenv('NVENC_BV', '8M')
-    preset = os.getenv('NVENC_PRESET', 'p1')
-    
-    print(f"🔧 إعدادات NVENC: CQ={cq}, MaxRate={maxrate}, BufSize={bufsize}, BV={bv}, Preset={preset}")
     
     return [
         '-c:v', 'h264_nvenc',      # استخدام h264_nvenc
-        '-preset', preset,         # preset قابل للتخصيص
+        '-preset', 'p1',           # أسرع preset
         '-rc', 'vbr',              # Variable Bitrate
         '-cq', cq,                 # جودة متوازنة (قابلة للتخصيص)
         '-b:v', bv,                # معدل بت أساسي
@@ -455,15 +452,8 @@ def process_video_fallback(video_path, output_path):
                 '-filter_complex', filter_complex
             ]
             cmd.extend(map_args)
-            # قراءة إعدادات CPU من متغيرات البيئة
-            cpu_preset = os.getenv('X264_PRESET', 'veryfast')
-            cpu_crf = os.getenv('X264_CRF', '20')
-            cpu_threads = os.getenv('FFMPEG_THREADS', '0')
-            
-            print(f"🖥️ إعدادات CPU: Preset={cpu_preset}, CRF={cpu_crf}, Threads={cpu_threads}")
-            
             cmd.extend(['-c:v', 'libx264'])
-            cmd.extend(['-preset', cpu_preset, '-crf', cpu_crf, '-threads', cpu_threads])
+            cmd.extend(['-preset', 'veryfast', '-crf', '20', '-threads', '0'])
             cmd.extend(audio_codec)
             cmd.extend(['-movflags', '+faststart'])
             cmd.append(output_path)
@@ -497,9 +487,6 @@ def merge_videos(video1_path, video2_path):
             encoder = get_nvenc_encoder()
             if encoder == 'h264_nvenc':
                 # استخدام GPU للدمج
-                # قراءة إعدادات NVENC من متغيرات البيئة
-                nvenc_settings = get_final_nvenc_settings()
-                
                 merge_cmd = [
                     'ffmpeg', '-y',
                     '-i', video1_path,
@@ -507,17 +494,19 @@ def merge_videos(video1_path, video2_path):
                     '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
                     '-map', '[outv]',
                     '-map', '[outa]',
-                    '-c:a', 'aac'
+                    '-c:v', 'h264_nvenc',
+                    '-c:a', 'aac',
+                    '-preset', 'p1',
+                    '-rc', 'vbr',
+                    '-cq', '19',
+                    '-b:v', '8M',
+                    '-maxrate', '16M',
+                    '-bufsize', '32M',
+                    '-pix_fmt', 'yuv420p',
+                    merged_path
                 ]
-                merge_cmd.extend(nvenc_settings)
-                merge_cmd.append(merged_path)
             else:
                 # استخدام CPU مع أسرع إعدادات
-                # قراءة إعدادات CPU من متغيرات البيئة
-                cpu_preset = os.getenv('X264_PRESET', 'veryfast')
-                cpu_crf = os.getenv('X264_CRF', '20')
-                cpu_threads = os.getenv('FFMPEG_THREADS', '0')
-                
                 merge_cmd = [
                     'ffmpeg', '-y',
                     '-i', video1_path,
@@ -527,9 +516,9 @@ def merge_videos(video1_path, video2_path):
                     '-map', '[outa]',
                     '-c:v', 'libx264',
                     '-c:a', 'aac',
-                    '-preset', cpu_preset,
-                    '-crf', cpu_crf,
-                    '-threads', cpu_threads,
+                    '-preset', 'veryfast',
+                    '-crf', '20',
+                    '-threads', '0',
                     '-pix_fmt', 'yuv420p',
                     merged_path
                 ]

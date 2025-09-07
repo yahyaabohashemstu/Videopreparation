@@ -1,13 +1,21 @@
+# Docker Compose for GPU/NVENC support
+# Requires: nvidia-container-toolkit on host
+# Usage: docker-compose -f docker-compose.nvidia.yml up
+
 networks:
   video_network:
     driver: bridge
+
+volumes:
+  redis_data:
+  uploads_data:
+  outputs_data:
 
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    networks:
-      - video_network
+    networks: [video_network]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -17,11 +25,12 @@ services:
       retries: 3
 
   video-processor-api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.nvidia
     ports:
       - "5000:5000"
-    networks:
-      - video_network
+    networks: [video_network]
     volumes:
       - uploads_data:/data/uploads
       - outputs_data:/data/outputs
@@ -38,9 +47,24 @@ services:
       - GUNICORN_TIMEOUT=600
       - GUNICORN_MAX_REQUESTS=500
       - GUNICORN_MAX_REQUESTS_JITTER=50
-      - FLASK_CORS_ORIGINS=https://ooc4wcggkoowkws8kkks0cgo.coolify.khaledalnassan.com
-      # For Coolify: REDIS_URL=redis://default:YOUR_PASSWORD@redis-database-xxx:6379/0
       - REDIS_URL=redis://redis:6379/0
+      - FLASK_CORS_ORIGINS=https://ooc4wcggkoowkws8kkks0cgo.coolify.khaledalnassan.com
+      # NVENC Settings
+      - NVENC_CQ=19
+      - NVENC_MAXRATE=16M
+      - NVENC_BUFSIZE=32M
+      - NVENC_BV=8M
+      - NVENC_PRESET=p1
+      # CPU Fallback Settings
+      - X264_PRESET=veryfast
+      - X264_CRF=20
+      - FFMPEG_THREADS=8
+      # Celery Settings
+      - CELERY_CONCURRENCY=3
+      - CELERY_PREFETCH_MULTIPLIER=1
+      - CELERY_VISIBILITY_TIMEOUT=21600
+      - TASK_SOFT_TIME_LIMIT=18000
+      - TASK_TIME_LIMIT=21600
     restart: unless-stopped
     depends_on:
       redis:
@@ -53,9 +77,10 @@ services:
       start_period: 40s
 
   video-processor-worker:
-    build: .
-    networks:
-      - video_network
+    build:
+      context: .
+      dockerfile: Dockerfile.nvidia
+    networks: [video_network]
     volumes:
       - uploads_data:/data/uploads
       - outputs_data:/data/outputs
@@ -65,12 +90,27 @@ services:
       - WORKER_MODE=celery
       - UPLOAD_FOLDER=/data/uploads
       - OUTPUT_FOLDER=/data/outputs
-      - CELERY_CONCURRENCY=3
-      - CELERY_PREFETCH_MULTIPLIER=1
       - REDIS_URL=redis://redis:6379/0
-      # GPU support (ignored if no GPU available)
+      # GPU Settings
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - GPU_ACCELERATION=true
+      # NVENC Settings
+      - NVENC_CQ=19
+      - NVENC_MAXRATE=16M
+      - NVENC_BUFSIZE=32M
+      - NVENC_BV=8M
+      - NVENC_PRESET=p1
+      # CPU Fallback Settings
+      - X264_PRESET=veryfast
+      - X264_CRF=20
+      - FFMPEG_THREADS=8
+      # Celery Settings
+      - CELERY_CONCURRENCY=2
+      - CELERY_PREFETCH_MULTIPLIER=1
+      - CELERY_VISIBILITY_TIMEOUT=21600
+      - TASK_SOFT_TIME_LIMIT=18000
+      - TASK_TIME_LIMIT=21600
     restart: unless-stopped
     depends_on:
       redis:
@@ -83,8 +123,3 @@ services:
       - driver: nvidia
         count: all
         capabilities: [gpu]
-
-volumes:
-  redis_data:
-  uploads_data:
-  outputs_data:

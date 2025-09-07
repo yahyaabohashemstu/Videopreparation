@@ -497,9 +497,6 @@ def merge_videos(video1_path, video2_path):
             encoder = get_nvenc_encoder()
             if encoder == 'h264_nvenc':
                 # استخدام GPU للدمج
-                # قراءة إعدادات NVENC من متغيرات البيئة
-                nvenc_settings = get_final_nvenc_settings()
-                
                 merge_cmd = [
                     'ffmpeg', '-y',
                     '-i', video1_path,
@@ -507,17 +504,19 @@ def merge_videos(video1_path, video2_path):
                     '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
                     '-map', '[outv]',
                     '-map', '[outa]',
-                    '-c:a', 'aac'
+                    '-c:v', 'h264_nvenc',
+                    '-c:a', 'aac',
+                    '-preset', 'p1',
+                    '-rc', 'vbr',
+                    '-cq', '19',
+                    '-b:v', '8M',
+                    '-maxrate', '16M',
+                    '-bufsize', '32M',
+                    '-pix_fmt', 'yuv420p',
+                    merged_path
                 ]
-                merge_cmd.extend(nvenc_settings)
-                merge_cmd.append(merged_path)
             else:
                 # استخدام CPU مع أسرع إعدادات
-                # قراءة إعدادات CPU من متغيرات البيئة
-                cpu_preset = os.getenv('X264_PRESET', 'veryfast')
-                cpu_crf = os.getenv('X264_CRF', '20')
-                cpu_threads = os.getenv('FFMPEG_THREADS', '0')
-                
                 merge_cmd = [
                     'ffmpeg', '-y',
                     '-i', video1_path,
@@ -527,9 +526,9 @@ def merge_videos(video1_path, video2_path):
                     '-map', '[outa]',
                     '-c:v', 'libx264',
                     '-c:a', 'aac',
-                    '-preset', cpu_preset,
-                    '-crf', cpu_crf,
-                    '-threads', cpu_threads,
+                    '-preset', 'veryfast',
+                    '-crf', '20',
+                    '-threads', '0',
                     '-pix_fmt', 'yuv420p',
                     merged_path
                 ]
