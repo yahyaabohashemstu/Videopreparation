@@ -952,26 +952,14 @@ def system_info():
     # حماية endpoint في الإنتاج
     if app.config.get('FLASK_ENV') == 'production':
         return jsonify({'error': 'غير متاح في الإنتاج'}), 403
-    # معلومات النظام المتقدمة مع psutil
+    # معلومات النظام الأساسية بدون psutil
     system_data = {
-        'disk_usage': {
-            'total': psutil.disk_usage('/').total,
-            'used': psutil.disk_usage('/').used,
-            'free': psutil.disk_usage('/').free,
-            'percent': psutil.disk_usage('/').percent
-        },
-        'memory_info': {
-            'total': psutil.virtual_memory().total,
-            'available': psutil.virtual_memory().available,
-            'used': psutil.virtual_memory().used,
-            'percent': psutil.virtual_memory().percent
-        },
+        'disk_usage': get_disk_usage(),
+        'memory_info': get_memory_info(),
         'process_info': {
             'pid': os.getpid(),
             'cwd': os.getcwd(),
             'uid': os.getuid() if hasattr(os, 'getuid') else 'N/A',
-            'cpu_percent': psutil.cpu_percent(interval=1),
-            'memory_percent': psutil.Process().memory_percent()
         }
     }
     
