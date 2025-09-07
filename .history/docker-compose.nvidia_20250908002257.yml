@@ -1,0 +1,109 @@
+# Docker Compose for GPU/NVENC support
+# Requires: nvidia-container-toolkit on host
+# Usage: docker-compose -f docker-compose.nvidia.yml up
+
+networks:
+  video_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  uploads_data:
+  outputs_data:
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [video_network]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  video-processor-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    networks: [video_network]
+    volumes:
+      - uploads_data:/data/uploads
+      - outputs_data:/data/outputs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+      - DEBUG=false
+      - PORT=5000
+      - MAX_CONTENT_LENGTH=524288000
+      - UPLOAD_FOLDER=/data/uploads
+      - OUTPUT_FOLDER=/data/outputs
+      - GUNICORN_WORKERS=3
+      - GUNICORN_THREADS=8
+      - GUNICORN_TIMEOUT=600
+      - GUNICORN_MAX_REQUESTS=500
+      - GUNICORN_MAX_REQUESTS_JITTER=50
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_CORS_ORIGINS=https://ooc4wcggkoowkws8kkks0cgo.coolify.khaledalnassan.com
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  video-processor-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.nvidia
+    networks: [video_network]
+    volumes:
+      - uploads_data:/data/uploads
+      - outputs_data:/data/outputs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+      - WORKER_MODE=celery
+      - UPLOAD_FOLDER=/data/uploads
+      - OUTPUT_FOLDER=/data/outputs
+      - REDIS_URL=redis://redis:6379/0
+      # GPU Settings
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - GPU_ACCELERATION=true
+      # NVENC Settings
+      - NVENC_CQ=19
+      - NVENC_MAXRATE=16M
+      - NVENC_BUFSIZE=32M
+      - NVENC_BV=8M
+      - NVENC_PRESET=p1
+      # CPU Fallback Settings
+      - X264_PRESET=veryfast
+      - X264_CRF=20
+      - FFMPEG_THREADS=8
+      # Celery Settings
+      - CELERY_CONCURRENCY=2
+      - CELERY_PREFETCH_MULTIPLIER=1
+      - CELERY_VISIBILITY_TIMEOUT=21600
+      - TASK_SOFT_TIME_LIMIT=18000
+      - TASK_TIME_LIMIT=21600
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+    # GPU device request - modern Docker Compose v2 syntax
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]
