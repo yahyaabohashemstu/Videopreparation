@@ -62,14 +62,12 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-fallback-secret-key}
+      # For Coolify: REDIS_URL=redis://default:YOUR_PASSWORD@redis-database-xxx:6379/0
+      - REDIS_URL=redis://redis:6379/0
       - UPLOAD_FOLDER=/data/uploads
       - OUTPUT_FOLDER=/data/outputs
       - WORKER_MODE=celery
       - CELERY_CONCURRENCY=3
-      - CELERY_PREFETCH_MULTIPLIER=1
-      - GPU_ACCELERATION=true
-      # For Coolify: REDIS_URL=redis://default:YOUR_PASSWORD@redis-database-xxx:6379/0
-      - REDIS_URL=redis://redis:6379/0
     restart: unless-stopped
     depends_on:
       redis:
